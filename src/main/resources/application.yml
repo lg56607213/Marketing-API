@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: marketing-agent
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:marketing_agent;MODE=MySQL;DATABASE_TO_LOWER=TRUE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  info:
+    title: AI Marketing Agent API
+    version: v1
+
+jwt:
+  secret: ${JWT_SECRET:ai-marketing-agent-secret-key-must-be-at-least-32-characters-long}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+ai:
+  provider: ${AI_PROVIDER:stub}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4.1-mini}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}

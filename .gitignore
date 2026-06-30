@@ -1,0 +1,33 @@
+HELP.md
+.gradle/
+build/
+bin/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### VS Code ###
+.vscode/
+
+### Eclipse ###
+.settings/
+.classpath
+.project
+
+### Spring Boot ###
+*.log
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Sensitive ###
+*.env
+.env
