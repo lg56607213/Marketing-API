@@ -31,3 +31,8 @@ Thumbs.db
 ### Sensitive ###
 *.env
 .env
+
+### Frontend ###
+client/node_modules/
+client/dist/
+client/.cache/
