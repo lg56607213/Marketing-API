@@ -10,6 +10,9 @@ import { ChannelAnalyticsPage } from '@/pages/analytics/ChannelAnalyticsPage'
 import { AdPerformancePage } from '@/pages/analytics/AdPerformancePage'
 import { BidManagementPage } from '@/pages/analytics/BidManagementPage'
 import { AdReportPage } from '@/pages/analytics/AdReportPage'
+import { SeoPage } from '@/pages/analytics/SeoPage'
+import { SearchQueryPage } from '@/pages/analytics/SearchQueryPage'
+import { KeywordToolPage } from '@/pages/analytics/KeywordToolPage'
 import { CompetitorAnalysisPage } from '@/pages/analytics/CompetitorAnalysisPage'
 import { AIHistoryPage } from '@/pages/AIHistoryPage'
 import { ImageLibraryPage } from '@/pages/ImageLibraryPage'
@@ -33,6 +36,9 @@ export default function App() {
           <Route path="/analytics/ads" element={<AdPerformancePage />} />
           <Route path="/analytics/bids" element={<BidManagementPage />} />
           <Route path="/analytics/ad-report" element={<AdReportPage />} />
+          <Route path="/analytics/seo" element={<SeoPage />} />
+          <Route path="/analytics/search-queries" element={<SearchQueryPage />} />
+          <Route path="/analytics/keywords" element={<KeywordToolPage />} />
           <Route path="/analytics/competitors" element={<CompetitorAnalysisPage />} />
           <Route path="/history" element={<AIHistoryPage />} />
           <Route path="/images" element={<ImageLibraryPage />} />

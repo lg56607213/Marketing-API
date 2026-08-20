@@ -6,16 +6,20 @@ import com.marketingagent.common.exception.BadRequestException;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,6 +42,9 @@ public class NaverSearchAdClient implements SearchAdClient {
      * /stats 는 일자별 조회(timeIncrement=1)를 단건 id 로만 지원한다.
      * ids 목록은 timeIncrement=allDays 요약에서만 받으므로 일자별은 키워드마다 한 번씩 호출한다.
      */
+
+    private static final int REPORT_MAX_ATTEMPTS = 15;
+    private static final long REPORT_POLL_INTERVAL_MS = 2500L;
 
     private static final List<String> STAT_FIELDS =
             List.of("impCnt", "clkCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt");
@@ -207,6 +214,223 @@ public class NaverSearchAdClient implements SearchAdClient {
         } catch (RestClientResponseException e) {
             log.error("입찰가 추정 실패 {} {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("네이버 입찰가 추정에 실패했습니다: " + e.getStatusCode());
+        }
+    }
+
+    @Override
+    public List<RelatedKeyword> relatedKeywords(List<String> hints) {
+        if (hints.isEmpty()) {
+            return List.of();
+        }
+        // 키워드도구는 공백을 제거한 힌트를 최대 5개까지 받는다.
+        String joined = hints.stream().limit(5).map(h -> h.replace(" ", "")).collect(Collectors.joining(","));
+        JsonNode response = get("/keywordstool", "hintKeywords=" + encode(joined) + "&showDetail=1",
+                new ParameterizedTypeReference<JsonNode>() {});
+
+        List<RelatedKeyword> result = new ArrayList<>();
+        for (JsonNode node : response.path("keywordList")) {
+            result.add(new RelatedKeyword(
+                    node.path("relKeyword").asText(),
+                    parseCount(node.path("monthlyPcQcCnt")),
+                    parseCount(node.path("monthlyMobileQcCnt")),
+                    node.path("monthlyAvePcClkCnt").asDouble(),
+                    node.path("monthlyAveMobileClkCnt").asDouble(),
+                    node.path("compIdx").asText("-")));
+        }
+        return result;
+    }
+
+    /** 검색량이 적으면 숫자 대신 "< 10" 같은 문자열이 온다. */
+    private long parseCount(JsonNode node) {
+        if (node.isNumber()) {
+            return node.asLong();
+        }
+        String raw = node.asText("").replaceAll("[^0-9]", "");
+        return raw.isEmpty() ? 0 : Long.parseLong(raw);
+    }
+
+    @Override
+    public List<SearchQueryRow> searchQueryReport(LocalDate date) {
+        String statDt = date.format(DateTimeFormatter.BASIC_ISO_DATE);
+        JsonNode job = post("/stat-reports", Map.of("reportTp", "EXPKEYWORD", "statDt", statDt));
+        long jobId = job.path("reportJobId").asLong();
+        if (jobId == 0) {
+            log.warn("검색어 리포트 생성에 실패했습니다: {}", job);
+            return List.of();
+        }
+
+        String downloadUrl = awaitReport(jobId);
+        if (downloadUrl == null) {
+            return List.of();
+        }
+
+        List<SearchQueryRow> rows = new ArrayList<>();
+        for (String line : getRaw(downloadUrl).split("\\r?\\n")) {
+            if (line.isBlank()) {
+                continue;
+            }
+            String[] c = line.split("\\t");
+            if (c.length < 11) {
+                continue;
+            }
+            rows.add(new SearchQueryRow(date, c[2], c[3], c[4], c[6],
+                    parseLong(c[8]), parseLong(c[9]), parseLong(c[10])));
+        }
+        return rows;
+    }
+
+    /** 리포트는 비동기로 만들어진다. BUILT 가 될 때까지 짧게 기다린다. */
+    private String awaitReport(long jobId) {
+        for (int attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
+            JsonNode info = get("/stat-reports/" + jobId, "", new ParameterizedTypeReference<JsonNode>() {});
+            String status = info.path("status").asText();
+            if ("BUILT".equals(status)) {
+                return info.path("downloadUrl").asText(null);
+            }
+            if ("ERROR".equals(status) || "NONE".equals(status)) {
+                log.warn("검색어 리포트 생성 실패: {}", info);
+                return null;
+            }
+            try {
+                Thread.sleep(REPORT_POLL_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+        log.warn("검색어 리포트가 제한 시간 안에 완성되지 않았습니다: jobId={}", jobId);
+        return null;
+    }
+
+    private long parseLong(String value) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    @Override
+    public List<NccKeyword> createKeywords(String nccAdgroupId, List<NewKeyword> keywords) {
+        List<Map<String, Object>> body = keywords.stream()
+                .map(k -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("keyword", k.keyword());
+                    item.put("useGroupBidAmt", k.bidAmt() == null);
+                    if (k.bidAmt() != null) {
+                        item.put("bidAmt", k.bidAmt());
+                    }
+                    item.put("userLock", false);
+                    return item;
+                })
+                .toList();
+
+        JsonNode response = post("/ncc/keywords?nccAdgroupId=" + encode(nccAdgroupId), body);
+        List<NccKeyword> created = new ArrayList<>();
+        for (JsonNode node : response) {
+            created.add(new NccKeyword(
+                    node.path("nccKeywordId").asText(), node.path("nccAdgroupId").asText(),
+                    node.path("keyword").asText(), node.path("status").asText(),
+                    node.path("bidAmt").asLong(), node.path("useGroupBidAmt").asBoolean(),
+                    node.path("userLock").asBoolean()));
+        }
+        return created;
+    }
+
+    @Override
+    public void deleteKeyword(String nccKeywordId) {
+        delete("/ncc/keywords/" + nccKeywordId, "");
+    }
+
+    @Override
+    public List<RestrictedKeyword> listRestrictedKeywords(String nccAdgroupId) {
+        return toRestricted(get("/ncc/adgroups/" + nccAdgroupId + "/restricted-keywords", "",
+                new ParameterizedTypeReference<JsonNode>() {}));
+    }
+
+    @Override
+    public List<RestrictedKeyword> addRestrictedKeywords(String nccAdgroupId, List<String> keywords, String type) {
+        List<Map<String, Object>> body = keywords.stream()
+                .map(k -> Map.<String, Object>of("keyword", k, "type", type))
+                .toList();
+        return toRestricted(post("/ncc/adgroups/" + nccAdgroupId + "/restricted-keywords", body));
+    }
+
+    @Override
+    public void deleteRestrictedKeyword(String nccAdgroupId, String restrictedKeywordId) {
+        delete("/ncc/adgroups/" + nccAdgroupId + "/restricted-keywords", "ids=" + encode(restrictedKeywordId));
+    }
+
+    private List<RestrictedKeyword> toRestricted(JsonNode response) {
+        List<RestrictedKeyword> result = new ArrayList<>();
+        for (JsonNode node : response) {
+            result.add(new RestrictedKeyword(
+                    node.path("nccAdgroupRestrictKwdId").asText(),
+                    node.path("keyword").asText(),
+                    node.path("type").asText()));
+        }
+        return result;
+    }
+
+    private JsonNode post(String pathWithQuery, Object body) {
+        String path = pathWithQuery.split("\\?")[0];
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+        try {
+            JsonNode response = restClient.post()
+                    .uri(URI.create(properties.baseUrl() + pathWithQuery))
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", properties.apiKey())
+                    .header("X-Customer", properties.customerId())
+                    .header("X-Signature", signature)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            return response != null ? response : objectMapper.createObjectNode();
+        } catch (RestClientResponseException e) {
+            log.error("네이버 API POST 실패 {} -> {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BadRequestException("네이버 API 호출에 실패했습니다: " + e.getResponseBodyAsString());
+        }
+    }
+
+    private void delete(String path, String query) {
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "DELETE", path);
+        URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
+        try {
+            restClient.delete()
+                    .uri(uri)
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", properties.apiKey())
+                    .header("X-Customer", properties.customerId())
+                    .header("X-Signature", signature)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            log.error("네이버 API DELETE 실패 {} -> {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BadRequestException("네이버 API 삭제에 실패했습니다: " + e.getResponseBodyAsString());
+        }
+    }
+
+    /** 리포트 다운로드 URL 은 별도 경로라 서명 경로를 그 URL 의 path 로 잡는다. */
+    private String getRaw(String url) {
+        URI uri = URI.create(url);
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "GET", uri.getPath());
+        try {
+            String body = RestClient.create().get()
+                    .uri(uri)
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", properties.apiKey())
+                    .header("X-Customer", properties.customerId())
+                    .header("X-Signature", signature)
+                    .retrieve()
+                    .body(String.class);
+            return body != null ? body : "";
+        } catch (RestClientResponseException e) {
+            log.error("리포트 다운로드 실패 {} {}", e.getStatusCode(), e.getResponseBodyAsString());
+            return "";
         }
     }
 

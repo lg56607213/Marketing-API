@@ -33,6 +33,7 @@ public class AdController {
     private final AdSyncService adSyncService;
     private final AdAnalyticsService adAnalyticsService;
     private final AdCampaignRepository campaignRepository;
+    private final AdGroupRepository adGroupRepository;
     private final SearchAdClient searchAdClient;
     private final NaverSearchAdProperties naverProperties;
 
@@ -78,6 +79,12 @@ public class AdController {
     @GetMapping("/campaigns")
     public ResponseEntity<ApiResponse<List<AdCampaign>>> campaigns() {
         return ResponseEntity.ok(ApiResponse.ok(campaignRepository.findAll()));
+    }
+
+    @Operation(summary = "광고그룹 목록 조회")
+    @GetMapping("/adgroups")
+    public ResponseEntity<ApiResponse<List<AdGroup>>> adgroups() {
+        return ResponseEntity.ok(ApiResponse.ok(adGroupRepository.findAll()));
     }
 
     @Operation(summary = "키워드별 성과 조회")

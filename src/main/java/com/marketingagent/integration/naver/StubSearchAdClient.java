@@ -3,6 +3,8 @@ package com.marketingagent.integration.naver;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -25,6 +27,9 @@ public class StubSearchAdClient implements SearchAdClient {
 
     /** Stub 에서 승인된 입찰가 변경을 기억해 화면에서 반영 결과를 확인할 수 있게 한다. */
     private final Map<String, Long> overriddenBids = new ConcurrentHashMap<>();
+
+    /** Stub 에서 등록한 제외 키워드를 기억한다. */
+    private final Map<String, List<RestrictedKeyword>> restricted = new ConcurrentHashMap<>();
 
     private static final List<String> KEYWORDS = List.of(
             "화물차", "1톤화물차", "중고화물차", "화물차매매", "탑차",
@@ -82,6 +87,74 @@ public class StubSearchAdClient implements SearchAdClient {
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
         overriddenBids.put(nccKeywordId, bidAmt);
         return bidAmt;
+    }
+
+    @Override
+    public List<RelatedKeyword> relatedKeywords(List<String> hints) {
+        List<RelatedKeyword> result = new ArrayList<>();
+        for (String hint : hints) {
+            for (String suffix : List.of("", "가격", "리스", "중고", "추천")) {
+                String keyword = hint + suffix;
+                int seed = Math.abs(keyword.hashCode());
+                result.add(new RelatedKeyword(keyword, 100 + seed % 4000, 300 + seed % 12000,
+                        seed % 40, seed % 120, List.of("높음", "중간", "낮음").get(seed % 3)));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<SearchQueryRow> searchQueryReport(LocalDate date) {
+        List<SearchQueryRow> rows = new ArrayList<>();
+        for (int i = 0; i < KEYWORDS.size(); i++) {
+            String query = KEYWORDS.get(i) + (i % 2 == 0 ? "" : " 추천");
+            int seed = Math.abs((query + date).hashCode());
+            long imp = 5 + seed % 200;
+            long clk = seed % 5;
+            rows.add(new SearchQueryRow(date, CAMPAIGN_ID, ADGROUP_ID, query,
+                    i % 3 == 0 ? "P" : "M", imp, clk, clk * (500 + seed % 900)));
+        }
+        return rows;
+    }
+
+    @Override
+    public List<NccKeyword> createKeywords(String nccAdgroupId, List<NewKeyword> keywords) {
+        List<NccKeyword> created = new ArrayList<>();
+        for (NewKeyword k : keywords) {
+            created.add(new NccKeyword("nkw-stub-" + Math.abs(k.keyword().hashCode()), nccAdgroupId,
+                    k.keyword(), "PAUSED", k.bidAmt() != null ? k.bidAmt() : 70L,
+                    k.bidAmt() == null, false));
+        }
+        return created;
+    }
+
+    @Override
+    public void deleteKeyword(String nccKeywordId) {
+        overriddenBids.remove(nccKeywordId);
+    }
+
+    @Override
+    public List<RestrictedKeyword> listRestrictedKeywords(String nccAdgroupId) {
+        return List.copyOf(restricted.getOrDefault(nccAdgroupId, List.of()));
+    }
+
+    @Override
+    public List<RestrictedKeyword> addRestrictedKeywords(String nccAdgroupId, List<String> keywords, String type) {
+        List<RestrictedKeyword> added = new ArrayList<>();
+        for (String keyword : keywords) {
+            added.add(new RestrictedKeyword("rst-stub-" + Math.abs(keyword.hashCode()), keyword, type));
+        }
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        all.addAll(added);
+        restricted.put(nccAdgroupId, all);
+        return added;
+    }
+
+    @Override
+    public void deleteRestrictedKeyword(String nccAdgroupId, String restrictedKeywordId) {
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        all.removeIf(r -> r.id().equals(restrictedKeywordId));
+        restricted.put(nccAdgroupId, all);
     }
 
     private StatRow statRow(String id, LocalDate date) {

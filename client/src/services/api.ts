@@ -14,6 +14,13 @@ import type {
   BidApplyResult,
   AdReport,
   AdHealth,
+  KeywordIdea,
+  SearchQueryPerformance,
+  SearchQuerySyncResult,
+  RestrictedKeyword,
+  AdGroupSummary,
+  SeoRow,
+  SeoHealth,
 } from '@/types'
 
 const http = axios.create({ baseURL: '/api' })
@@ -118,4 +125,51 @@ export const adReportApi = {
   list: () => http.get<ApiResponse<AdReport[]>>('/ads/reports').then(unwrap),
   get: (id: number) => http.get<ApiResponse<AdReport>>(`/ads/reports/${id}`).then(unwrap),
   health: () => http.get<ApiResponse<AdHealth>>('/ads/health').then(unwrap),
+}
+
+// 키워드 발굴 · 등록 · 제외
+export const keywordToolApi = {
+  ideas: (hints: string, excludeRegistered = false, mustContainHint = true) =>
+    http
+      .get<ApiResponse<KeywordIdea[]>>('/ads/keywords/ideas', { params: { hints, excludeRegistered, mustContainHint } })
+      .then(unwrap),
+  add: (nccAdgroupId: string, keywords: string[], position?: number, device = 'MOBILE') =>
+    http
+      .post<ApiResponse<unknown[]>>('/ads/keywords', keywords, {
+        params: { nccAdgroupId, position, device },
+      })
+      .then(unwrap),
+  remove: (nccKeywordId: string) => http.delete(`/ads/keywords/${nccKeywordId}`),
+  restricted: (nccAdgroupId: string) =>
+    http
+      .get<ApiResponse<RestrictedKeyword[]>>('/ads/keywords/restricted', { params: { nccAdgroupId } })
+      .then(unwrap),
+  addRestricted: (nccAdgroupId: string, keywords: string[], type = 'EXP_SEARCH') =>
+    http
+      .post<ApiResponse<RestrictedKeyword[]>>('/ads/keywords/restricted', keywords, {
+        params: { nccAdgroupId, type },
+      })
+      .then(unwrap),
+  removeRestricted: (nccAdgroupId: string, id: string) =>
+    http.delete(`/ads/keywords/restricted/${id}`, { params: { nccAdgroupId } }),
+  adgroups: () => http.get<ApiResponse<AdGroupSummary[]>>('/ads/adgroups').then(unwrap),
+}
+
+// 유입 검색어 리포트
+export const searchQueryApi = {
+  sync: (days = 7) =>
+    http.post<ApiResponse<SearchQuerySyncResult>>('/ads/search-queries/sync', null, { params: { days } }).then(unwrap),
+  list: (since?: string, until?: string) =>
+    http
+      .get<ApiResponse<SearchQueryPerformance[]>>('/ads/search-queries', { params: { since, until } })
+      .then(unwrap),
+}
+
+// 자연검색 (SEO)
+export const seoApi = {
+  health: () => http.get<ApiResponse<SeoHealth>>('/seo/health').then(unwrap),
+  searchAnalytics: (dimension: 'query' | 'page' = 'query', limit = 100) =>
+    http
+      .get<ApiResponse<SeoRow[]>>('/seo/search-analytics', { params: { dimension, limit } })
+      .then(unwrap),
 }

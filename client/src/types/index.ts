@@ -199,3 +199,61 @@ export interface AdHealth {
   campaignCount: number
   message: string
 }
+
+export interface KeywordIdea {
+  keyword: string
+  pcCount: number
+  mobileCount: number
+  totalCount: number
+  pcClick: number
+  mobileClick: number
+  competition: string
+  registered: boolean
+}
+
+export interface SearchQueryPerformance {
+  searchQuery: string
+  registered: boolean
+  impCnt: number
+  clkCnt: number
+  ctr: number
+  cpc: number
+  salesAmt: number
+}
+
+export interface SearchQuerySyncResult {
+  days: number
+  rows: number
+  since: string
+  until: string
+}
+
+export interface RestrictedKeyword {
+  id: string
+  keyword: string
+  type: string
+}
+
+export interface AdGroupSummary {
+  nccAdgroupId: string
+  nccCampaignId: string
+  name: string
+  status: string | null
+  bidAmt: number | null
+  dailyBudget: number | null
+}
+
+export interface SeoRow {
+  key: string
+  impressions: number
+  clicks: number
+  ctr: number
+  position: number
+}
+
+export interface SeoHealth {
+  provider: string
+  configured: boolean
+  reachable: boolean
+  message: string
+}
