@@ -76,7 +76,15 @@ public class AdAnalyticsService {
                 salesAmt,
                 ccnt,
                 ratio(ccnt * 100.0, clkCnt),
-                round2(row.avgRnk() != null ? row.avgRnk() : 0.0));
+                weightedRank(row.rnkWeighted(), impCnt));
+    }
+
+    /** 노출가중 평균순위. 노출이 없던 날의 0 이 섞여 순위가 좋아 보이지 않도록 노출수로 가중한다. */
+    private double weightedRank(Double rnkWeighted, long impCnt) {
+        if (rnkWeighted == null || impCnt == 0) {
+            return 0.0;
+        }
+        return round2(rnkWeighted / impCnt);
     }
 
     /** 분모가 0이면 0을 돌려준다. 노출·클릭이 없는 키워드에서 나누기가 터지지 않도록. */

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,6 +36,19 @@ public class BidController {
         List<BidRecommendationResponse> result = bidRecommendationService.generate().stream()
                 .map(BidRecommendationResponse::from)
                 .toList();
+        return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
+    @Operation(summary = "목표 노출순위 기준 추천 생성",
+            description = "네이버 추정 입찰가로 목표 평균노출순위를 맞춘다. 네이버에는 아무것도 반영하지 않는다.")
+    @PostMapping("/target-rank")
+    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> targetRank(
+            @RequestParam(defaultValue = "3") int position,
+            @RequestParam(defaultValue = "MOBILE") String device) {
+        List<BidRecommendationResponse> result =
+                bidRecommendationService.generateForTargetRank(position, device).stream()
+                        .map(BidRecommendationResponse::from)
+                        .toList();
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 

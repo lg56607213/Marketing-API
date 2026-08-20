@@ -57,6 +57,10 @@ public class BidRecommendation extends BaseEntity {
     @Column(nullable = false, length = 20)
     private BidStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private BidStrategy strategy;
+
     /** 실제로 반영된 입찰가. 반영 전에는 null */
     private Long appliedBid;
 
@@ -70,6 +74,13 @@ public class BidRecommendation extends BaseEntity {
     public BidRecommendation(String nccKeywordId, String keyword, long currentBid, long recommendedBid,
             String reason, LocalDate since, LocalDate until, long impCnt, long clkCnt, long salesAmt,
             long ccnt, double ctr, double avgRnk) {
+        this(nccKeywordId, keyword, currentBid, recommendedBid, reason, since, until,
+                impCnt, clkCnt, salesAmt, ccnt, ctr, avgRnk, BidStrategy.PERFORMANCE);
+    }
+
+    public BidRecommendation(String nccKeywordId, String keyword, long currentBid, long recommendedBid,
+            String reason, LocalDate since, LocalDate until, long impCnt, long clkCnt, long salesAmt,
+            long ccnt, double ctr, double avgRnk, BidStrategy strategy) {
         this.nccKeywordId = nccKeywordId;
         this.keyword = keyword;
         this.currentBid = currentBid;
@@ -84,6 +95,7 @@ public class BidRecommendation extends BaseEntity {
         this.ctr = ctr;
         this.avgRnk = avgRnk;
         this.status = BidStatus.PENDING;
+        this.strategy = strategy;
     }
 
     public void markApplied(long appliedBid, Long actorId, String message) {

@@ -18,7 +18,7 @@ public interface KeywordStatDailyRepository extends JpaRepository<KeywordStatDai
 
     @Query("""
             select new com.marketingagent.domain.ads.dto.KeywordAggregate(
-                s.nccKeywordId, sum(s.impCnt), sum(s.clkCnt), sum(s.salesAmt), sum(s.ccnt), avg(s.avgRnk))
+                s.nccKeywordId, sum(s.impCnt), sum(s.clkCnt), sum(s.salesAmt), sum(s.ccnt), sum(s.avgRnk * s.impCnt))
             from KeywordStatDaily s
             where s.statDate between :since and :until
             group by s.nccKeywordId

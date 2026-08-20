@@ -22,6 +22,7 @@ public record BidRecommendationResponse(
         long ccnt,
         double ctr,
         double avgRnk,
+        String strategy,
         String status,
         Long appliedBid,
         LocalDateTime decidedAt,
@@ -35,6 +36,6 @@ public record BidRecommendationResponse(
                 r.getId(), r.getNccKeywordId(), r.getKeyword(), r.getCurrentBid(), r.getRecommendedBid(),
                 change, rate, change > 0 ? "UP" : "DOWN", r.getReason(), r.getSince(), r.getUntil(),
                 r.getImpCnt(), r.getClkCnt(), r.getSalesAmt(), r.getCcnt(), r.getCtr(), r.getAvgRnk(),
-                r.getStatus().name(), r.getAppliedBid(), r.getDecidedAt(), r.getResultMessage());
+                r.getStrategy().name(), r.getStatus().name(), r.getAppliedBid(), r.getDecidedAt(), r.getResultMessage());
     }
 }

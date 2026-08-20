@@ -1,0 +1,2 @@
+ALTER TABLE bid_recommendations
+    ADD COLUMN strategy VARCHAR(20) NOT NULL DEFAULT 'PERFORMANCE';

@@ -69,6 +69,16 @@ public class StubSearchAdClient implements SearchAdClient {
     }
 
     @Override
+    public Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device) {
+        Map<String, Long> result = new java.util.LinkedHashMap<>();
+        for (String keyword : keywords) {
+            long base = 500 + Math.abs(keyword.hashCode() % 900);
+            result.put(keyword, Math.max(70, base * (6 - Math.min(position, 5))));
+        }
+        return result;
+    }
+
+    @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
         overriddenBids.put(nccKeywordId, bidAmt);
         return bidAmt;

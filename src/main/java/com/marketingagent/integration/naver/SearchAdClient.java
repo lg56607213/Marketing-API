@@ -6,6 +6,7 @@ import com.marketingagent.integration.naver.dto.NccKeyword;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 검색광고 조회 클라이언트. AiProvider 와 동일하게 실제 구현과 Stub 을 교체할 수 있다.
@@ -31,4 +32,12 @@ public interface SearchAdClient {
      * @return 반영 후 입찰가
      */
     long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt);
+
+    /**
+     * 목표 평균노출순위를 맞추기 위한 추정 입찰가를 네이버에서 받아온다.
+     *
+     * @param device PC 또는 MOBILE
+     * @return 키워드 문자열 -> 추정 입찰가
+     */
+    Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device);
 }

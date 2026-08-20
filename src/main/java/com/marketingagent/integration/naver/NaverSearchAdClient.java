@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +34,10 @@ import org.springframework.web.client.RestClientResponseException;
 @ConditionalOnProperty(name = "naver.searchad.provider", havingValue = "naver")
 public class NaverSearchAdClient implements SearchAdClient {
 
-    /** 한 번의 /stats 호출에 넣는 최대 ID 개수. 너무 많으면 URL 길이 제한에 걸린다. */
-    private static final int STAT_BATCH_SIZE = 100;
+    /**
+     * /stats 는 일자별 조회(timeIncrement=1)를 단건 id 로만 지원한다.
+     * ids 목록은 timeIncrement=allDays 요약에서만 받으므로 일자별은 키워드마다 한 번씩 호출한다.
+     */
 
     private static final List<String> STAT_FIELDS =
             List.of("impCnt", "clkCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt");
@@ -71,19 +74,15 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<StatRow> dailyStats(List<String> ids, LocalDate since, LocalDate until) {
-        if (ids.isEmpty()) {
-            return List.of();
-        }
         List<StatRow> rows = new ArrayList<>();
-        for (int from = 0; from < ids.size(); from += STAT_BATCH_SIZE) {
-            List<String> batch = ids.subList(from, Math.min(from + STAT_BATCH_SIZE, ids.size()));
-            rows.addAll(fetchStatBatch(batch, since, until));
+        for (String id : ids) {
+            rows.addAll(fetchDailyStats(id, since, until));
         }
         return rows;
     }
 
-    private List<StatRow> fetchStatBatch(List<String> ids, LocalDate since, LocalDate until) {
-        String query = "ids=" + encode(toJson(ids))
+    private List<StatRow> fetchDailyStats(String id, LocalDate since, LocalDate until) {
+        String query = "id=" + encode(id)
                 + "&fields=" + encode(toJson(STAT_FIELDS))
                 + "&timeRange=" + encode("{\"since\":\"" + since + "\",\"until\":\"" + until + "\"}")
                 + "&timeIncrement=1";
@@ -102,8 +101,9 @@ public class NaverSearchAdClient implements SearchAdClient {
                 log.warn("/stats 응답에서 일자 필드를 찾지 못했습니다: {}", node);
                 continue;
             }
+            // 일자별 응답에는 id 가 실려 오지 않으므로 요청한 id 를 그대로 붙인다.
             rows.add(new StatRow(
-                    node.path("id").asText(),
+                    id,
                     statDate,
                     node.path("impCnt").asLong(),
                     node.path("clkCnt").asLong(),
@@ -118,7 +118,7 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     /** 일자 필드명이 응답 종류에 따라 다르게 내려와서 알려진 후보를 모두 확인한다. */
     private LocalDate readDate(JsonNode node) {
-        for (String field : List.of("statDt", "dateTime", "statDate", "date", "day")) {
+        for (String field : List.of("dateStart", "statDt", "dateTime", "statDate", "date", "day")) {
             String raw = node.path(field).asText(null);
             if (raw == null || raw.isBlank()) {
                 continue;
@@ -166,6 +166,47 @@ public class NaverSearchAdClient implements SearchAdClient {
         } catch (RestClientResponseException e) {
             log.error("입찰가 변경 실패 {} -> {} {}", nccKeywordId, e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("네이버 입찰가 변경에 실패했습니다: " + e.getStatusCode());
+        }
+    }
+
+    @Override
+    public Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        if (keywords.isEmpty()) {
+            return result;
+        }
+
+        String path = "/estimate/average-position-bid/keyword";
+        List<Map<String, Object>> items = keywords.stream()
+                .map(keyword -> Map.<String, Object>of("key", keyword, "position", position))
+                .toList();
+        Map<String, Object> body = Map.of("device", device, "items", items, "keywordplus", false);
+
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+
+        try {
+            JsonNode response = restClient.post()
+                    .uri(URI.create(properties.baseUrl() + path))
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", properties.apiKey())
+                    .header("X-Customer", properties.customerId())
+                    .header("X-Signature", signature)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            if (response == null) {
+                return result;
+            }
+            for (JsonNode node : response.path("estimate")) {
+                result.put(node.path("keyword").asText(), node.path("bid").asLong());
+            }
+            return result;
+        } catch (RestClientResponseException e) {
+            log.error("입찰가 추정 실패 {} {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BadRequestException("네이버 입찰가 추정에 실패했습니다: " + e.getStatusCode());
         }
     }
 

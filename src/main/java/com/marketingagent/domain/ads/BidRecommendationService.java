@@ -73,6 +73,70 @@ public class BidRecommendationService {
     }
 
     /**
+     * 목표 평균노출순위에 맞춘 추천을 만든다.
+     * 네이버의 추정 입찰가를 그대로 목표로 삼으므로 1회 변동폭 제한(maxChangeRate)은 적용하지 않는다.
+     * 추정치 자체가 목표값이라 20%씩 나눠 접근하면 며칠이 걸리고 그 사이 추정치가 다시 바뀐다.
+     * 입찰가 상·하한은 그대로 적용된다.
+     *
+     * @param position 목표 평균노출순위
+     * @param device   PC 또는 MOBILE. 노출·비용 비중이 큰 기기를 기준으로 삼는다.
+     */
+    @Transactional
+    public List<BidRecommendation> generateForTargetRank(int position, String device) {
+        List<AdKeyword> keywords = keywordRepository.findAll();
+        if (keywords.isEmpty()) {
+            throw new BadRequestException("키워드가 없습니다. 먼저 검색광고 동기화를 실행하세요.");
+        }
+
+        Map<String, Long> estimates = searchAdClient.estimateBidForPosition(
+                keywords.stream().map(AdKeyword::getKeyword).toList(), position, device);
+
+        recommendationRepository.findByStatusOrderByIdDesc(BidStatus.PENDING)
+                .forEach(BidRecommendation::markSuperseded);
+
+        LocalDate until = LocalDate.now().minusDays(1);
+        LocalDate since = until.minusDays(Math.max(policy.lookbackDays(), 1) - 1L);
+        Map<String, KeywordAggregate> stats = statRepository.aggregateByKeyword(since, until).stream()
+                .collect(Collectors.toMap(KeywordAggregate::nccKeywordId, Function.identity(), (a, b) -> a));
+
+        List<BidRecommendation> created = new ArrayList<>();
+        for (AdKeyword keyword : keywords) {
+            Long estimate = estimates.get(keyword.getKeyword());
+            if (estimate == null) {
+                log.warn("추정 입찰가를 받지 못했습니다: {}", keyword.getKeyword());
+                continue;
+            }
+
+            long currentBid = currentBid(keyword);
+            long targetBid = Math.min(Math.max(estimate, policy.minBid()), policy.maxBid());
+            if (targetBid == currentBid) {
+                continue;
+            }
+
+            KeywordAggregate row = stats.get(keyword.getNccKeywordId());
+            long impCnt = row != null ? nz(row.impCnt()) : 0;
+            long clkCnt = row != null ? nz(row.clkCnt()) : 0;
+            long salesAmt = row != null ? nz(row.salesAmt()) : 0;
+            long ccnt = row != null ? nz(row.ccnt()) : 0;
+            double ctr = impCnt == 0 ? 0.0 : clkCnt * 100.0 / impCnt;
+            double avgRnk = row != null ? weightedRank(row.rnkWeighted(), impCnt) : 0.0;
+
+            String reason = String.format(
+                    "%s 기준 평균노출순위 %d위 목표. 네이버 추정 입찰가 %,d원. (최근 %d일: 노출 %,d · 클릭 %,d · 광고비 %,d원 · 실제 평균순위 %.2f)",
+                    device, position, estimate, policy.lookbackDays(), impCnt, clkCnt, salesAmt, avgRnk);
+
+            created.add(new BidRecommendation(keyword.getNccKeywordId(), keyword.getKeyword(),
+                    currentBid, targetBid, reason, since, until,
+                    impCnt, clkCnt, salesAmt, ccnt, round2(ctr), avgRnk, BidStrategy.TARGET_RANK));
+        }
+
+        created.sort(Comparator.comparingLong((BidRecommendation r) -> Math.abs(r.changeAmount())).reversed());
+        recommendationRepository.saveAll(created);
+        log.info("목표순위 {}위({}) 기준 추천 {}건 생성", position, device, created.size());
+        return created;
+    }
+
+    /**
      * 사용자가 승인한 추천을 네이버에 반영한다. 여기서만 쓰기가 일어난다.
      *
      * @param actorId 승인한 사용자
@@ -93,7 +157,10 @@ public class BidRecommendationService {
                     "오늘 반영 한도(" + policy.maxDailyApplies() + "건)를 초과했습니다. 내일 다시 시도하세요.");
         }
 
-        long targetBid = clamp(recommendation.getRecommendedBid(), recommendation.getCurrentBid());
+        // 목표순위 추천은 추정치 자체가 목표라 변동폭 제한을 적용하지 않는다.
+        long targetBid = recommendation.getStrategy() == BidStrategy.TARGET_RANK
+                ? bound(recommendation.getRecommendedBid())
+                : clamp(recommendation.getRecommendedBid(), recommendation.getCurrentBid());
         if (targetBid == recommendation.getCurrentBid()) {
             recommendation.markFailed(actorId, "가드레일 적용 후 변경할 금액이 없습니다.");
             return BidApplyResult.of(recommendation);
@@ -170,7 +237,7 @@ public class BidRecommendationService {
         long clkCnt = nz(row.clkCnt());
         long salesAmt = nz(row.salesAmt());
         long ccnt = nz(row.ccnt());
-        double avgRnk = row.avgRnk() != null ? row.avgRnk() : 0.0;
+        double avgRnk = weightedRank(row.rnkWeighted(), impCnt);
         double ctr = impCnt == 0 ? 0.0 : clkCnt * 100.0 / impCnt;
 
         if (impCnt < policy.minImpressions()) {
@@ -272,12 +339,25 @@ public class BidRecommendationService {
         return keyword.getBidAmt();
     }
 
+    /** 입찰가 상·하한만 적용한다. 목표순위 추천에서 쓴다. */
+    private long bound(long proposed) {
+        return Math.min(Math.max(proposed, policy.minBid()), policy.maxBid());
+    }
+
     /** 1회 변동폭과 상·하한을 모두 적용한다. 어떤 경로로도 이 한도를 넘길 수 없다. */
     private long clamp(long proposed, long currentBid) {
         long maxUp = Math.round(currentBid * (1 + policy.maxChangeRate()));
         long maxDown = Math.round(currentBid * (1 - policy.maxChangeRate()));
         long bounded = Math.min(Math.max(proposed, maxDown), maxUp);
-        return Math.min(Math.max(bounded, policy.minBid()), policy.maxBid());
+        return bound(bounded);
+    }
+
+    /** 노출가중 평균순위. 노출이 없던 날의 0 이 섞이면 순위가 실제보다 좋게 보인다. */
+    private double weightedRank(Double rnkWeighted, long impCnt) {
+        if (rnkWeighted == null || impCnt == 0) {
+            return 0.0;
+        }
+        return round2(rnkWeighted / impCnt);
     }
 
     private double round2(double value) {
