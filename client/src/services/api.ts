@@ -7,6 +7,13 @@ import type {
   ContentResponse,
   GenerateRequest,
   UserSummary,
+  AdSummary,
+  KeywordPerformance,
+  AdSyncResult,
+  BidRecommendation,
+  BidApplyResult,
+  AdReport,
+  AdHealth,
 } from '@/types'
 
 const http = axios.create({ baseURL: '/api' })
@@ -76,4 +83,39 @@ export const adminApi = {
   listUsers: () => http.get<ApiResponse<UserSummary[]>>('/admin/users').then(unwrap),
   createUser: (email: string, password: string) =>
     http.post<ApiResponse<UserSummary>>('/admin/users', { email, password }).then(unwrap),
+}
+
+// Ads (네이버 검색광고)
+export const adsApi = {
+  sync: (days = 30) =>
+    http.post<ApiResponse<AdSyncResult>>('/ads/sync', null, { params: { days } }).then(unwrap),
+  summary: (since?: string, until?: string) =>
+    http.get<ApiResponse<AdSummary>>('/ads/summary', { params: { since, until } }).then(unwrap),
+  keywords: (since?: string, until?: string) =>
+    http
+      .get<ApiResponse<KeywordPerformance[]>>('/ads/keywords', { params: { since, until } })
+      .then(unwrap),
+}
+
+// 입찰가 조정 (추천 -> 승인 -> 반영)
+export const bidApi = {
+  recommend: () =>
+    http.post<ApiResponse<BidRecommendation[]>>('/ads/bids/recommend').then(unwrap),
+  pending: () => http.get<ApiResponse<BidRecommendation[]>>('/ads/bids').then(unwrap),
+  history: () => http.get<ApiResponse<BidRecommendation[]>>('/ads/bids/history').then(unwrap),
+  approve: (id: number) =>
+    http.post<ApiResponse<BidApplyResult>>(`/ads/bids/${id}/approve`).then(unwrap),
+  reject: (id: number) =>
+    http.post<ApiResponse<BidApplyResult>>(`/ads/bids/${id}/reject`).then(unwrap),
+  approveAll: (ids: number[]) =>
+    http.post<ApiResponse<BidApplyResult[]>>('/ads/bids/approve', ids).then(unwrap),
+}
+
+// 광고 분석 리포트 / 연동 진단
+export const adReportApi = {
+  generate: (days = 7) =>
+    http.post<ApiResponse<AdReport>>('/ads/reports', null, { params: { days } }).then(unwrap),
+  list: () => http.get<ApiResponse<AdReport[]>>('/ads/reports').then(unwrap),
+  get: (id: number) => http.get<ApiResponse<AdReport>>(`/ads/reports/${id}`).then(unwrap),
+  health: () => http.get<ApiResponse<AdHealth>>('/ads/health').then(unwrap),
 }

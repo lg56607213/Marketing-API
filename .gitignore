@@ -36,3 +36,12 @@ Thumbs.db
 client/node_modules/
 client/dist/
 client/.cache/
+
+### Local DB ###
+data/
+
+### TS build info ###
+client/*.tsbuildinfo
+
+### Env ###
+.env

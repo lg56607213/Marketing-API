@@ -2,8 +2,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, FolderOpen, Wand2, BarChart3, History,
   ImageIcon, Settings, Building2, Users, LogOut, Zap,
-  TrendingUp, Radio, Globe,
-} from 'lucide-react'
+  TrendingUp, Radio, Globe, MousePointerClick, Gavel, FileBarChart } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -20,6 +19,9 @@ const analyticsItems = [
   { to: '/analytics', icon: BarChart3, label: '개요', exact: true },
   { to: '/analytics/market', icon: TrendingUp, label: '마켓 인텔리전스', exact: false },
   { to: '/analytics/channels', icon: Radio, label: '채널 애널리틱스', exact: false },
+  { to: '/analytics/ads', icon: MousePointerClick, label: '검색광고 성과', exact: false },
+  { to: '/analytics/bids', icon: Gavel, label: '입찰가 조정', exact: false },
+  { to: '/analytics/ad-report', icon: FileBarChart, label: 'AI 광고 리포트', exact: false },
   { to: '/analytics/competitors', icon: Globe, label: '경쟁사 분석', exact: false },
 ]
 

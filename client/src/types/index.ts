@@ -99,3 +99,103 @@ export const toApiEmail = (loginId: string) =>
   loginId.includes('@') ? loginId : `${loginId}${EMAIL_DOMAIN}`
 export const toDisplayId = (email: string) =>
   email.replace(EMAIL_DOMAIN, '')
+
+export interface DailyPoint {
+  statDate: string
+  impCnt: number
+  clkCnt: number
+  salesAmt: number
+  ccnt: number
+}
+
+export interface AdSummary {
+  since: string
+  until: string
+  impCnt: number
+  clkCnt: number
+  ctr: number
+  cpc: number
+  salesAmt: number
+  ccnt: number
+  cvr: number
+  cpa: number
+  keywordCount: number
+  daily: DailyPoint[]
+}
+
+export interface KeywordPerformance {
+  nccKeywordId: string
+  keyword: string
+  adgroupName: string
+  status: string | null
+  bidAmt: number | null
+  impCnt: number
+  clkCnt: number
+  ctr: number
+  cpc: number
+  salesAmt: number
+  ccnt: number
+  cvr: number
+  avgRnk: number
+}
+
+export interface AdSyncResult {
+  provider: string
+  campaigns: number
+  adgroups: number
+  keywords: number
+  statRows: number
+  since: string
+  until: string
+}
+
+export interface BidRecommendation {
+  id: number
+  nccKeywordId: string
+  keyword: string
+  currentBid: number
+  recommendedBid: number
+  changeAmount: number
+  changeRate: number
+  direction: 'UP' | 'DOWN'
+  reason: string
+  since: string
+  until: string
+  impCnt: number
+  clkCnt: number
+  salesAmt: number
+  ccnt: number
+  ctr: number
+  avgRnk: number
+  status: string
+  appliedBid: number | null
+  decidedAt: string | null
+  resultMessage: string | null
+}
+
+export interface BidApplyResult {
+  id: number
+  keyword: string | null
+  status: string
+  currentBid: number | null
+  appliedBid: number | null
+  message: string | null
+}
+
+export interface AdReport {
+  id: number
+  title: string
+  body: string
+  since: string
+  until: string
+  generatedBy: string
+  createdAt: string
+}
+
+export interface AdHealth {
+  provider: string
+  credentialsSet: boolean
+  reachable: boolean
+  campaignCount: number
+  message: string
+}

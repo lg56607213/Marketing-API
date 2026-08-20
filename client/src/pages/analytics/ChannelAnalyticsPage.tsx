@@ -17,14 +17,6 @@ interface Channel {
   addedAt: string
 }
 
-interface MockPerf {
-  impressions: number
-  clicks: number
-  ctr: number
-  avgPosition: number
-  topContent: string
-}
-
 const CHANNEL_TYPES: Record<Channel['type'], string> = {
   website: '웹사이트',
   blog: '블로그',
@@ -32,13 +24,6 @@ const CHANNEL_TYPES: Record<Channel['type'], string> = {
   instagram: '인스타그램',
   other: '기타',
 }
-
-const MOCK_PERF: MockPerf[] = [
-  { impressions: 12400, clicks: 680, ctr: 5.5, avgPosition: 4.2, topContent: '담보대출 완벽 가이드' },
-  { impressions: 8900,  clicks: 412, ctr: 4.6, avgPosition: 6.1, topContent: 'DSR 규제 총정리' },
-  { impressions: 5200,  clicks: 198, ctr: 3.8, avgPosition: 8.3, topContent: '금리 비교 분석' },
-  { impressions: 3100,  clicks: 143, ctr: 4.6, avgPosition: 5.9, topContent: 'LTV 완화 영향' },
-]
 
 const INTEGRATIONS = [
   { name: 'Google Analytics 4', desc: '트래픽·전환율·이벤트 추적', icon: '📊', connected: false },
@@ -86,8 +71,6 @@ export function ChannelAnalyticsPage() {
     setChannels(updated)
   }
 
-  const perfFor = (i: number): MockPerf => MOCK_PERF[i % MOCK_PERF.length]
-
   return (
     <div className="space-y-6">
       {/* URL 관리 */}
@@ -109,7 +92,7 @@ export function ChannelAnalyticsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">내 채널 목록</CardTitle>
-          <CardDescription className="text-xs">등록된 채널의 예상 성과 지표 (연동 후 실제 데이터 반영)</CardDescription>
+          <CardDescription className="text-xs">채널 URL 관리용입니다. 실제 광고 성과는 「검색광고 성과」 메뉴에서 확인하세요.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {channels.length === 0 ? (
@@ -132,7 +115,6 @@ export function ChannelAnalyticsPage() {
                 <span className="col-span-1"></span>
               </div>
               {channels.map((ch, i) => {
-                const p = perfFor(i)
                 return (
                   <div key={ch.id} className="grid grid-cols-12 gap-3 px-6 py-3.5 items-center hover:bg-muted/20 transition-colors">
                     <div className="col-span-3 min-w-0">
@@ -150,18 +132,16 @@ export function ChannelAnalyticsPage() {
                       <Badge variant="outline" className="text-xs">{CHANNEL_TYPES[ch.type]}</Badge>
                     </div>
                     <div className="col-span-2 text-right">
-                      <span className="text-sm font-medium">{p.impressions.toLocaleString()}</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     </div>
                     <div className="col-span-1 text-right">
-                      <span className="text-sm">{p.clicks.toLocaleString()}</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     </div>
                     <div className="col-span-1 text-right">
-                      <span className={cn('text-sm font-medium', p.ctr >= 5 ? 'text-emerald-600' : 'text-amber-600')}>
-                        {p.ctr}%
-                      </span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     </div>
                     <div className="col-span-2">
-                      <p className="text-xs text-muted-foreground truncate">{p.topContent}</p>
+                      <p className="text-xs text-muted-foreground truncate">-</p>
                     </div>
                     <div className="col-span-1 flex justify-end">
                       <Button
@@ -185,10 +165,10 @@ export function ChannelAnalyticsPage() {
       {channels.length > 0 && (
         <div className="grid sm:grid-cols-4 gap-4">
           {[
-            { label: '총 노출수', value: channels.map((_, i) => perfFor(i).impressions).reduce((a, b) => a + b, 0).toLocaleString(), unit: '회' },
-            { label: '총 클릭수', value: channels.map((_, i) => perfFor(i).clicks).reduce((a, b) => a + b, 0).toLocaleString(), unit: '회' },
-            { label: '평균 CTR', value: (channels.map((_, i) => perfFor(i).ctr).reduce((a, b) => a + b, 0) / channels.length).toFixed(1), unit: '%' },
-            { label: '평균 순위', value: (channels.map((_, i) => perfFor(i).avgPosition).reduce((a, b) => a + b, 0) / channels.length).toFixed(1), unit: '위' },
+            { label: '총 노출수', value: '-', unit: '' },
+            { label: '총 클릭수', value: '-', unit: '' },
+            { label: '평균 CTR', value: '-', unit: '' },
+            { label: '평균 순위', value: '-', unit: '' },
           ].map(stat => (
             <Card key={stat.label}>
               <CardContent className="pt-5 pb-4">
