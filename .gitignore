@@ -45,3 +45,4 @@ client/*.tsbuildinfo
 
 ### Env ###
 .env
+.env.local

@@ -161,7 +161,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/ads/sy
 
 기본값은 H2 파일 모드입니다. MySQL로 옮기려면 다음 순서로 진행합니다.
 
-### 1. 데이터베이스와 계정 생성
+### 1. 데이터베이스와 전용 계정 생성
 
 `scripts/setup-mysql.sql` 의 `CHANGE_ME` 를 원하는 비밀번호로 바꾼 뒤 실행합니다.
 
@@ -169,23 +169,40 @@ curl -X POST -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/ads/sy
 mysql -u root -p < scripts/setup-mysql.sql
 ```
 
-### 2. 실행
+애플리케이션 전용 계정(`marketing`)에는 `marketing_agent` 스키마 권한만 부여됩니다.
+같은 서버에 다른 데이터베이스가 있어도 접근할 수 없습니다.
+
+### 2. 자격증명 파일 작성
+
+비밀번호를 명령줄에 노출하지 않도록 `.env.local` 에 담아 둡니다.
+이 파일은 `.gitignore` 에 포함되어 커밋되지 않습니다.
 
 ```bash
-DB_URL="jdbc:mysql://localhost:3306/marketing_agent?serverTimezone=Asia/Seoul&characterEncoding=UTF-8" \
-DB_USERNAME=marketing \
-DB_PASSWORD=설정한비밀번호 \
-DB_DRIVER=com.mysql.cj.jdbc.Driver \
-FLYWAY_ENABLED=true \
-JPA_DDL_AUTO=validate \
-./gradlew bootRun
+cat > .env.local <<'ENV'
+export DB_URL="jdbc:mysql://localhost:3306/marketing_agent?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
+export DB_USERNAME=marketing
+export DB_PASSWORD='설정한비밀번호'
+export DB_DRIVER=com.mysql.cj.jdbc.Driver
+export FLYWAY_ENABLED=true
+export JPA_DDL_AUTO=validate
+ENV
 ```
 
-`FLYWAY_ENABLED=true` 로 두면 `V1__init.sql`(콘텐츠)과 `V2__ads.sql`(검색광고)이 순서대로 적용됩니다.
-빈 데이터베이스에서 시작할 때만 이 조합을 쓰세요.
+### 3. 실행
+
+```bash
+source .env.local && ./gradlew bootRun
+```
+
+첫 실행 시 Flyway가 `V1__init.sql`(콘텐츠) → `V2__ads.sql`(검색광고) →
+`V3__ad_reports.sql`(리포트) 순으로 적용합니다.
+`JPA_DDL_AUTO=validate` 이므로 엔티티와 스키마가 어긋나면 기동 단계에서 즉시 실패합니다.
+
+### 주의
 
 H2에 쌓인 기존 데이터는 자동으로 넘어가지 않습니다. 옮겨야 할 데이터가 있다면
 H2 콘솔에서 `SCRIPT TO 'dump.sql'` 로 내보낸 뒤 수동으로 반영하세요.
+실계정 데이터를 쌓기 전에 전환하는 것이 순서상 유리합니다.
 
 ## 테스트
 
