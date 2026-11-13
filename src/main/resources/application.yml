@@ -51,6 +51,8 @@ naver:
     sync-enabled: ${NAVER_SYNC_ENABLED:false}
     sync-cron: ${NAVER_SYNC_CRON:0 30 5 * * *}
     sync-days: ${NAVER_SYNC_DAYS:30}
+    # 시간대별 성과·전환·검색어 리포트를 매일 다시 받을 일수 (간접전환이 뒤늦게 잡힘)
+    report-sync-days: ${NAVER_REPORT_SYNC_DAYS:7}
 
 ads:
   bid:

@@ -3,10 +3,13 @@ package com.marketingagent.integration.naver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketingagent.common.exception.BadRequestException;
+import com.marketingagent.integration.naver.dto.ConversionRow;
+import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.net.URI;
@@ -251,63 +254,73 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<SearchQueryRow> searchQueryReport(LocalDate date) {
-        String statDt = date.format(DateTimeFormatter.BASIC_ISO_DATE);
-        JsonNode job = post("/stat-reports", Map.of("reportTp", "EXPKEYWORD", "statDt", statDt));
-        long jobId = job.path("reportJobId").asLong();
-        if (jobId == 0) {
-            log.warn("검색어 리포트 생성에 실패했습니다: {}", job);
-            return List.of();
-        }
-
-        String downloadUrl = awaitReport(jobId);
-        if (downloadUrl == null) {
-            return List.of();
-        }
-
-        List<SearchQueryRow> rows = new ArrayList<>();
-        for (String line : getRaw(downloadUrl).split("\\r?\\n")) {
-            if (line.isBlank()) {
-                continue;
-            }
-            String[] c = line.split("\\t");
-            if (c.length < 11) {
-                continue;
-            }
-            rows.add(new SearchQueryRow(date, c[2], c[3], c[4], c[6],
-                    parseLong(c[8]), parseLong(c[9]), parseLong(c[10])));
-        }
-        return rows;
+        return StatReportParser.searchQueries(date, downloadReport(StatReportParser.EXPKEYWORD, date));
     }
 
-    /** 리포트는 비동기로 만들어진다. BUILT 가 될 때까지 짧게 기다린다. */
-    private String awaitReport(long jobId) {
+    @Override
+    public List<HourlyStatRow> hourlyStatReport(LocalDate date) {
+        return StatReportParser.hourlyStats(date, downloadReport(StatReportParser.AD_DETAIL, date));
+    }
+
+    @Override
+    public List<ConversionRow> conversionReport(LocalDate date) {
+        return StatReportParser.conversions(date, downloadReport(StatReportParser.AD_CONVERSION_DETAIL, date));
+    }
+
+    @Override
+    public ReportProbe probeReport(String reportTp, LocalDate date) {
+        List<String[]> lines = StatReportParser.split(downloadReport(reportTp, date));
+        return new ReportProbe(lines.size(), lines.isEmpty() ? 0 : lines.get(0).length);
+    }
+
+    /**
+     * 대용량 보고서를 만들고 완성되면 본문을 내려받는다.
+     *
+     * @return 탭 구분 본문. 그 날짜에 데이터가 없으면 빈 문자열
+     * @throws IllegalStateException 리포트 생성이 실패했거나 제한 시간 안에 끝나지 않은 경우
+     */
+    private String downloadReport(String reportTp, LocalDate date) {
+        String statDt = date.format(DateTimeFormatter.BASIC_ISO_DATE);
+        JsonNode job = post("/stat-reports", Map.of("reportTp", reportTp, "statDt", statDt));
+        long jobId = job.path("reportJobId").asLong();
+        if (jobId == 0) {
+            throw new IllegalStateException(reportTp + " 리포트 생성 요청이 거부됐습니다: " + job);
+        }
+        String downloadUrl = awaitReport(reportTp, jobId);
+        return downloadUrl == null ? "" : getRaw(downloadUrl);
+    }
+
+    /**
+     * 리포트는 비동기로 만들어진다. BUILT 가 될 때까지 짧게 기다린다.
+     *
+     * @return 다운로드 URL. 데이터가 없다고 응답한 날(NONE)이면 null
+     */
+    private String awaitReport(String reportTp, long jobId) {
         for (int attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
             JsonNode info = get("/stat-reports/" + jobId, "", new ParameterizedTypeReference<JsonNode>() {});
             String status = info.path("status").asText();
             if ("BUILT".equals(status)) {
-                return info.path("downloadUrl").asText(null);
+                String url = info.path("downloadUrl").asText(null);
+                if (url == null || url.isBlank()) {
+                    throw new IllegalStateException(reportTp + " 리포트에 다운로드 주소가 없습니다: " + info);
+                }
+                return url;
             }
-            if ("ERROR".equals(status) || "NONE".equals(status)) {
-                log.warn("검색어 리포트 생성 실패: {}", info);
+            if ("NONE".equals(status)) {
+                log.info("{} 리포트에 데이터가 없습니다: jobId={}", reportTp, jobId);
                 return null;
+            }
+            if ("ERROR".equals(status)) {
+                throw new IllegalStateException(reportTp + " 리포트 생성이 실패했습니다: " + info);
             }
             try {
                 Thread.sleep(REPORT_POLL_INTERVAL_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return null;
+                throw new IllegalStateException(reportTp + " 리포트 대기가 중단됐습니다.");
             }
         }
-        log.warn("검색어 리포트가 제한 시간 안에 완성되지 않았습니다: jobId={}", jobId);
-        return null;
-    }
-
-    private long parseLong(String value) {
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
+        throw new IllegalStateException(reportTp + " 리포트가 제한 시간 안에 완성되지 않았습니다: jobId=" + jobId);
     }
 
     @Override
@@ -430,7 +443,7 @@ public class NaverSearchAdClient implements SearchAdClient {
             return body != null ? body : "";
         } catch (RestClientResponseException e) {
             log.error("리포트 다운로드 실패 {} {}", e.getStatusCode(), e.getResponseBodyAsString());
-            return "";
+            throw new IllegalStateException("리포트 다운로드에 실패했습니다: " + e.getStatusCode());
         }
     }
 

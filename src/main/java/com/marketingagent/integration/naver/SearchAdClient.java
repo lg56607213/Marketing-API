@@ -1,9 +1,12 @@
 package com.marketingagent.integration.naver;
 
+import com.marketingagent.integration.naver.dto.ConversionRow;
+import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.time.LocalDate;
@@ -56,6 +59,21 @@ public interface SearchAdClient {
      * 등록 키워드뿐 아니라 확장검색으로 매칭된 실제 검색어까지 포함한다.
      */
     List<SearchQueryRow> searchQueryReport(LocalDate date);
+
+    /**
+     * 특정 일자의 시간대별 성과 리포트(AD_DETAIL)를 내려받는다.
+     * 소재·지역·매체 단위까지 쪼개진 줄이 그대로 오므로 호출하는 쪽에서 합산한다.
+     */
+    List<HourlyStatRow> hourlyStatReport(LocalDate date);
+
+    /**
+     * 특정 일자의 전환 상세 리포트(AD_CONVERSION_DETAIL)를 내려받는다.
+     * 전환수와 전환매출액이 전환방식·전환유형별로 담긴다.
+     */
+    List<ConversionRow> conversionReport(LocalDate date);
+
+    /** 리포트를 내려받아 줄 수와 컬럼 수만 확인한다. 연결 점검용. */
+    ReportProbe probeReport(String reportTp, LocalDate date);
 
     /** 광고그룹에 키워드를 추가한다. */
     List<NccKeyword> createKeywords(String nccAdgroupId, List<NewKeyword> keywords);

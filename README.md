@@ -38,6 +38,16 @@ Java 21, Spring Boot 3, JPA 기반의 AI 마케팅 콘텐츠 생성 + 네이버 
 - GET /api/ads/keywords — 키워드별 성과
 - GET /api/ads/campaigns
 
+### 시간대별 성과 · 전환
+네이버 대용량 보고서(AD_DETAIL, AD_CONVERSION_DETAIL)를 내려받아 적재한다.
+- GET /api/ads/diagnostics — 실계정 연결 점검 (자격증명 → 계정 구조 → 성과 → 리포트 3종 형식). 광고 설정은 바꾸지 않음
+- POST /api/ads/stat-reports/sync?days=7 — 시간대별 성과·전환 적재 (최대 31일)
+- GET /api/ads/stat-reports/hourly?device=M — 하루 중 시간대별 성과 (전환·ROAS 포함)
+- GET /api/ads/stat-reports/conversions — 키워드별 전환수·전환매출액·CPA·ROAS
+
+`NAVER_SYNC_ENABLED=true` 이면 일 배치가 계정 구조·일자별 성과에 이어 시간대별 성과·전환·검색어 리포트까지
+최근 `NAVER_REPORT_SYNC_DAYS`(기본 7)일치를 매일 다시 받는다. 간접전환이 며칠 뒤에 잡히기 때문이다.
+
 ### 입찰가 조정
 - POST /api/ads/bids/recommend — 조정안 생성 (네이버에 쓰지 않음)
 - GET /api/ads/bids — 승인 대기 목록

@@ -1,9 +1,12 @@
 package com.marketingagent.integration.naver;
 
+import com.marketingagent.integration.naver.dto.ConversionRow;
+import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.time.LocalDate;
@@ -115,6 +118,54 @@ public class StubSearchAdClient implements SearchAdClient {
                     i % 3 == 0 ? "P" : "M", imp, clk, clk * (500 + seed % 900)));
         }
         return rows;
+    }
+
+    /** 오전 9시~오후 10시에 노출이 몰리는 가짜 시간대별 성과. */
+    @Override
+    public List<HourlyStatRow> hourlyStatReport(LocalDate date) {
+        List<HourlyStatRow> rows = new ArrayList<>();
+        for (int i = 0; i < KEYWORDS.size(); i++) {
+            for (int hour = 0; hour < 24; hour++) {
+                for (String device : List.of("P", "M")) {
+                    int seed = Math.abs((keywordId(i) + date + hour + device).hashCode());
+                    boolean busy = hour >= 9 && hour <= 22;
+                    long imp = (busy ? 20 : 2) + seed % (busy ? 40 : 6);
+                    long clk = imp * (1 + seed % 6) / 100 + (seed % 7 == 0 ? 1 : 0);
+                    long cost = clk * (400 + seed % 700);
+                    long rnkSum = imp * (10 + seed % 40) / 10;
+                    rows.add(new HourlyStatRow(date, hour, CAMPAIGN_ID, ADGROUP_ID, keywordId(i), device,
+                            imp, clk, cost, rnkSum));
+                }
+            }
+        }
+        return rows;
+    }
+
+    /** 짝수 번째 키워드만 전환이 나게 해서 비용만 쓰는 키워드가 드러나게 한다. */
+    @Override
+    public List<ConversionRow> conversionReport(LocalDate date) {
+        List<ConversionRow> rows = new ArrayList<>();
+        for (int i = 0; i < KEYWORDS.size(); i += 2) {
+            for (int hour = 9; hour <= 22; hour++) {
+                int seed = Math.abs((keywordId(i) + date + hour).hashCode());
+                if (seed % 4 != 0) {
+                    continue;
+                }
+                String device = seed % 3 == 0 ? "P" : "M";
+                rows.add(new ConversionRow(date, hour, CAMPAIGN_ID, ADGROUP_ID, keywordId(i), device,
+                        1, "lead", 1, 0));
+                if (seed % 8 == 0) {
+                    rows.add(new ConversionRow(date, hour, CAMPAIGN_ID, ADGROUP_ID, keywordId(i), device,
+                            2, "purchase", 1, 30000L + seed % 70000));
+                }
+            }
+        }
+        return rows;
+    }
+
+    @Override
+    public ReportProbe probeReport(String reportTp, LocalDate date) {
+        return new ReportProbe(1, StatReportParser.expectedColumns(reportTp));
     }
 
     @Override
