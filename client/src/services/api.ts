@@ -15,6 +15,10 @@ import type {
   AdReport,
   AdHealth,
   NaverAccountStatus,
+  PlanProposal,
+  PlanRequest,
+  Briefing,
+  BriefingPeriod,
   KeywordIdea,
   SearchQueryPerformance,
   SearchQuerySyncResult,
@@ -172,6 +176,16 @@ export const naverAccountApi = {
   connect: (customerId: string, apiKey: string, secretKey: string) =>
     http.put<ApiResponse<NaverAccountStatus>>('/ads/account', { customerId, apiKey, secretKey }).then(unwrap),
   disconnect: () => http.delete<ApiResponse<NaverAccountStatus>>('/ads/account').then(unwrap),
+}
+
+// 운영 계획 · 일간/주간 브리핑
+export const plannerApi = {
+  propose: (request: PlanRequest) =>
+    http.post<ApiResponse<PlanProposal>>('/ads/plans/propose', request).then(unwrap),
+  currentPlan: () => http.get<ApiResponse<PlanProposal | null>>('/ads/plans/current').then(unwrap),
+  generateBriefing: (period: BriefingPeriod) =>
+    http.post<ApiResponse<Briefing>>('/ads/briefings', null, { params: { period } }).then(unwrap),
+  briefings: () => http.get<ApiResponse<Briefing[]>>('/ads/briefings').then(unwrap),
 }
 
 // 자연검색 (SEO)

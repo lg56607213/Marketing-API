@@ -2,7 +2,11 @@ package com.marketingagent.domain.ads;
 
 import com.marketingagent.common.security.OwnerContext;
 import com.marketingagent.domain.ads.account.NaverAccountService;
+import com.marketingagent.domain.ads.planner.BriefingService;
+import com.marketingagent.domain.ads.planner.PlannerDtos.BriefingPeriod;
 import com.marketingagent.integration.naver.NaverSearchAdProperties;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -11,7 +15,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * naver.searchad.sync-enabled=true 일 때만 동작하는 일 배치.
- * 네이버 계정을 연결한 회원마다 계정 구조·일자별 성과, 시간대별 성과·전환, 검색어 리포트를 차례로 받는다.
+ * 네이버 계정을 연결한 회원마다 계정 구조·일자별 성과, 시간대별 성과·전환, 검색어 리포트를 차례로 받고
+ * 일간 브리핑(월요일에는 주간 브리핑도)을 만든다.
  * 한 회원이나 한 단계가 실패해도 나머지는 계속한다.
  */
 @Slf4j
@@ -24,6 +29,7 @@ public class AdSyncScheduler {
     private final ReportSyncService reportSyncService;
     private final SearchQueryService searchQueryService;
     private final NaverAccountService accountService;
+    private final BriefingService briefingService;
     private final NaverSearchAdProperties properties;
 
     @Scheduled(cron = "${naver.searchad.sync-cron}")
@@ -48,6 +54,15 @@ public class AdSyncScheduler {
             searchQueryService.sync(properties.reportSyncDays());
         } catch (Exception e) {
             log.error("검색어 리포트 일 배치 실패: user={}", userId, e);
+        }
+        // 수집이 끝나면 보고서를 써 둔다. 주간 브리핑은 월요일에 지난 7일치를 만든다.
+        try {
+            briefingService.generate(BriefingPeriod.DAILY);
+            if (LocalDate.now().getDayOfWeek() == DayOfWeek.MONDAY) {
+                briefingService.generate(BriefingPeriod.WEEKLY);
+            }
+        } catch (Exception e) {
+            log.error("브리핑 생성 실패: user={} {}", userId, e.getMessage());
         }
     }
 }

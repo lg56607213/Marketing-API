@@ -7,6 +7,8 @@ const pageTitles: Record<string, string> = {
   '/dashboard': '대시보드',
   '/projects': '프로젝트',
   '/content/new': '콘텐츠 생성',
+  '/analytics/plan': '운영 계획',
+  '/analytics/briefings': '운영 브리핑',
   '/analytics/market': '마켓 인텔리전스',
   '/analytics/channels': '채널 애널리틱스',
   '/analytics/competitors': '경쟁사 분석',

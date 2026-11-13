@@ -210,6 +210,94 @@ export interface NaverAccountStatus {
   message: string
 }
 
+export type GoalType = 'CONVERSIONS' | 'BUDGET'
+
+export interface PlanRequest {
+  seedKeywords: string[]
+  goalType: GoalType
+  targetConversions: number | null
+  monthlyBudget: number | null
+  saleValue: number | null
+  assumedCvrPct: number | null
+}
+
+export interface PlanKeyword {
+  keyword: string
+  monthlySearches: number
+  competition: string
+  suggestedBid: number
+  expectedClicks: number
+  expectedCost: number
+  selected: boolean
+}
+
+export interface PlanScenario {
+  name: string
+  cvrPct: number
+  conversions: number
+  cpa: number
+  revenue: number | null
+  roasPct: number | null
+}
+
+export interface PlanProposal {
+  id: number
+  goalType: GoalType
+  seedKeywords: string[]
+  monthlyBudget: number
+  dailyBudget: number
+  expectedClicks: number
+  expectedConversions: number
+  targetCpa: number
+  cvrPct: number
+  cvrSource: string
+  scenarios: PlanScenario[]
+  keywords: PlanKeyword[]
+  assumptions: string[]
+  steps: string[]
+  warnings: string[]
+  createdAt: string
+}
+
+export type BriefingPeriod = 'DAILY' | 'WEEKLY'
+export type BriefingVerdict = 'INCREASE' | 'HOLD' | 'DECREASE' | 'NEED_DATA'
+
+export interface BriefingMetric {
+  label: string
+  current: number
+  previous: number
+  unit: string
+  changePct: number | null
+}
+
+export interface Briefing {
+  id: number
+  period: BriefingPeriod
+  since: string
+  until: string
+  headline: string
+  verdict: BriefingVerdict
+  verdictReason: string
+  currentDailyBudget: number
+  suggestedDailyBudget: number | null
+  metrics: BriefingMetric[]
+  pacing: {
+    monthlyBudget: number
+    spentSoFar: number
+    projectedSpend: number
+    targetConversions: number
+    conversionsSoFar: number
+    projectedConversions: number
+    comment: string
+  } | null
+  ctrComment: string
+  cvrComment: string
+  actions: { type: string; target: string; detail: string }[]
+  narrative: string[]
+  generatedBy: string
+  createdAt: string
+}
+
 export interface KeywordIdea {
   keyword: string
   pcCount: number

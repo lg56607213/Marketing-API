@@ -48,6 +48,18 @@ Java 21, Spring Boot 3, JPA 기반의 AI 마케팅 콘텐츠 생성 + 네이버 
 `NAVER_SYNC_ENABLED=true` 이면 일 배치가 계정 구조·일자별 성과에 이어 시간대별 성과·전환·검색어 리포트까지
 최근 `NAVER_REPORT_SYNC_DAYS`(기본 7)일치를 매일 다시 받는다. 간접전환이 며칠 뒤에 잡히기 때문이다.
 
+### 운영 계획 · 브리핑
+직원 없이 광고를 운영하는 소기업을 위한 기능. 제안과 보고만 하고 광고 계정은 바꾸지 않는다.
+- POST /api/ads/plans/propose — 월 목표 전환수 또는 월 예산을 주면 키워드·예산·기대 성과(보수/기본/낙관)·운영 방법을 제안
+- GET /api/ads/plans/current — 현재 계획
+- POST /api/ads/briefings?period=DAILY|WEEKLY — 일간·주간 브리핑 생성 (같은 기간은 덮어씀)
+- GET /api/ads/briefings — 최근 브리핑
+
+브리핑은 지표 증감, 클릭률·전환율 평가, 이번 달 목표 대비 진행, 권장 조치와 함께
+광고비 판단(더 써도 됨 / 유지 / 줄이기 / 판단 보류)을 근거 수치와 같이 낸다.
+판단은 최근 14일을 기준으로 규칙으로 계산하며, AI 는 설정돼 있을 때 총평 한 문단만 덧붙인다.
+`NAVER_SYNC_ENABLED=true` 이면 일 배치가 수집 뒤에 일간 브리핑을, 월요일에는 주간 브리핑도 만든다.
+
 ### 입찰가 조정
 - POST /api/ads/bids/recommend — 조정안 생성 (네이버에 쓰지 않음)
 - GET /api/ads/bids — 승인 대기 목록
