@@ -14,20 +14,35 @@ export function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const isSignup = mode === 'signup'
   const { login } = useAuthStore()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!loginId || !password) { setError('아이디와 비밀번호를 모두 입력해 주세요.'); return }
+    if (isSignup && !/^[a-zA-Z0-9._-]{3,30}$/.test(loginId)) {
+      setError('아이디는 영문, 숫자, . _ - 만 써서 3~30자로 입력해 주세요.')
+      return
+    }
+    if (isSignup && password.length < 8) { setError('비밀번호는 8자 이상이어야 합니다.'); return }
     setError('')
     setLoading(true)
     try {
-      const auth = await authApi.login(toApiEmail(loginId), password)
+      const auth = isSignup
+        ? await authApi.register(toApiEmail(loginId), password)
+        : await authApi.login(toApiEmail(loginId), password)
       login(auth)
-      navigate('/dashboard')
-    } catch {
-      setError('아이디 또는 비밀번호가 올바르지 않습니다.')
+      // 가입 직후에는 네이버 광고 계정 연결부터 하도록 설정 화면으로 보낸다.
+      navigate(isSignup ? '/settings' : '/dashboard')
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status
+      if (isSignup) {
+        setError(status === 409 ? '이미 사용 중인 아이디입니다.' : '가입하지 못했습니다. 입력값을 확인해 주세요.')
+      } else {
+        setError('아이디 또는 비밀번호가 올바르지 않습니다.')
+      }
     } finally {
       setLoading(false)
     }
@@ -75,9 +90,11 @@ export function LoginPage() {
               </div>
               <span className="font-bold">AI 마케팅 에이전트</span>
             </div>
-            <h1 className="text-2xl font-bold">로그인</h1>
+            <h1 className="text-2xl font-bold">{isSignup ? '회원가입' : '로그인'}</h1>
             <p className="text-sm text-muted-foreground">
-              관리자로부터 발급받은 계정으로 로그인하세요.
+              {isSignup
+                ? '가입한 뒤 설정에서 내 네이버 검색광고 계정을 연결합니다.'
+                : '아이디와 비밀번호로 로그인하세요.'}
             </p>
           </div>
 
@@ -100,10 +117,10 @@ export function LoginPage() {
                 <Input
                   id="password"
                   type={showPw ? 'text' : 'password'}
-                  placeholder="비밀번호를 입력하세요"
+                  placeholder={isSignup ? '8자 이상' : '비밀번호를 입력하세요'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
                   className="pr-10"
                 />
                 <button
@@ -122,12 +139,19 @@ export function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              로그인
+              {isSignup ? '가입하기' : '로그인'}
             </Button>
           </form>
 
-          <p className="text-center text-xs text-muted-foreground">
-            계정 발급은 관리자에게 문의하세요.
+          <p className="text-center text-sm text-muted-foreground">
+            {isSignup ? '이미 계정이 있나요?' : '계정이 없나요?'}{' '}
+            <button
+              type="button"
+              className="font-medium text-primary hover:underline"
+              onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError('') }}
+            >
+              {isSignup ? '로그인' : '회원가입'}
+            </button>
           </p>
         </div>
       </div>

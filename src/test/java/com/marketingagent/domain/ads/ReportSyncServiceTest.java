@@ -2,6 +2,7 @@ package com.marketingagent.domain.ads;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.marketingagent.common.security.OwnerContext;
 import com.marketingagent.domain.ads.dto.DiagnosticReport;
 import com.marketingagent.domain.ads.dto.HourOfDayPerformance;
 import com.marketingagent.domain.ads.dto.KeywordConversionPerformance;
@@ -34,8 +35,14 @@ class ReportSyncServiceTest {
     @Autowired
     private KeywordConversionHourlyRepository conversionRepository;
 
+    private static final long OWNER = 7001L;
+
     @Test
     void syncIsRepeatableAndFeedsAnalytics() {
+        OwnerContext.runAs(OWNER, this::assertSyncIsRepeatableAndFeedsAnalytics);
+    }
+
+    private void assertSyncIsRepeatableAndFeedsAnalytics() {
         adSyncService.sync(1);
 
         ReportSyncResult first = reportSyncService.sync(2);
@@ -106,7 +113,7 @@ class ReportSyncServiceTest {
 
     @Test
     void diagnosticsPassInStubModeButFlagIt() {
-        DiagnosticReport report = diagnosticsService.run();
+        DiagnosticReport report = OwnerContext.callAs(OWNER, diagnosticsService::run);
 
         assertThat(report.ready()).isTrue();
         assertThat(report.checks()).extracting(DiagnosticReport.Check::status).doesNotContain("FAIL", "SKIP");

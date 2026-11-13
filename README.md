@@ -94,25 +94,32 @@ npm run dev
 
 발급되는 값은 3개입니다.
 
-| 값 | 환경변수 | 요청 헤더 |
-|---|---|---|
-| 고객 ID | `NAVER_CUSTOMER_ID` | `X-Customer` |
-| 액세스 라이선스 | `NAVER_API_KEY` | `X-API-KEY` |
-| 비밀키 | `NAVER_SECRET_KEY` | 서명 생성에만 사용 |
+| 값 | 요청 헤더 |
+|---|---|
+| 고객 ID | `X-Customer` |
+| 액세스 라이선스 | `X-API-KEY` |
+| 비밀키 | 서명 생성에만 사용 |
 
 요청마다 `{timestamp}.{method}.{path}` 를 비밀키로 HMAC-SHA256 서명해
 Base64 인코딩한 값을 `X-Signature` 헤더에 넣습니다. 서명 원문의 path 에는 쿼리스트링을 포함하지 않습니다.
 
-### 2. 연결 (첫 실행은 dry-run 권장)
+### 2. 연결 (회원별, 첫 실행은 dry-run 권장)
+
+네이버 계정은 **회원마다 하나씩** 연결합니다. 서버는 실계정 모드로 띄우기만 하면 됩니다.
 
 ```bash
-NAVER_SEARCHAD_PROVIDER=naver \
-NAVER_CUSTOMER_ID=고객ID \
-NAVER_API_KEY=액세스라이선스 \
-NAVER_SECRET_KEY=비밀키 \
-ADS_BID_DRY_RUN=true \
-./gradlew bootRun
+NAVER_SEARCHAD_PROVIDER=naver CREDENTIAL_ENCRYPTION_KEY=길고_고유한_값 ADS_BID_DRY_RUN=true ./gradlew bootRun
 ```
+
+그다음 각 회원이 가입·로그인해서 **설정 → 네이버 검색광고 연결**에 위 3개 값을 입력합니다.
+입력한 키로 실제 조회가 되는지 확인한 뒤에만 저장하고, 액세스 라이선스와 비밀키는 DB 에 암호화해 둡니다.
+`CREDENTIAL_ENCRYPTION_KEY` 를 바꾸면 이미 연결된 계정은 다시 연결해야 합니다.
+
+- 캠페인·키워드·성과·검색어·입찰 추천·AI 리포트는 모두 연결한 회원에게만 보입니다.
+- 일 배치는 계정을 연결한 회원마다 따로 돕니다.
+- 예전 방식(`NAVER_CUSTOMER_ID` / `NAVER_API_KEY` / `NAVER_SECRET_KEY` 환경변수)의 값이 남아 있으면
+  첫 실행 때 기본 관리자 계정의 연결로 한 번 옮겨집니다.
+- API: `GET/PUT/DELETE /api/ads/account`
 
 `ADS_BID_DRY_RUN=true` 이면 입찰가를 승인해도 네이버에 반영하지 않고 기록만 남깁니다.
 추천 품질을 확인한 뒤 `false` 로 바꾸세요.

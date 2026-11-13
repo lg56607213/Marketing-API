@@ -14,6 +14,7 @@ import type {
   BidApplyResult,
   AdReport,
   AdHealth,
+  NaverAccountStatus,
   KeywordIdea,
   SearchQueryPerformance,
   SearchQuerySyncResult,
@@ -163,6 +164,14 @@ export const searchQueryApi = {
     http
       .get<ApiResponse<SearchQueryPerformance[]>>('/ads/search-queries', { params: { since, until } })
       .then(unwrap),
+}
+
+// 회원별 네이버 검색광고 계정 연결
+export const naverAccountApi = {
+  status: () => http.get<ApiResponse<NaverAccountStatus>>('/ads/account').then(unwrap),
+  connect: (customerId: string, apiKey: string, secretKey: string) =>
+    http.put<ApiResponse<NaverAccountStatus>>('/ads/account', { customerId, apiKey, secretKey }).then(unwrap),
+  disconnect: () => http.delete<ApiResponse<NaverAccountStatus>>('/ads/account').then(unwrap),
 }
 
 // 자연검색 (SEO)

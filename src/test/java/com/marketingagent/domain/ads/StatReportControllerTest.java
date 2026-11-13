@@ -1,15 +1,16 @@
 package com.marketingagent.domain.ads;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -21,6 +22,8 @@ class StatReportControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void rejectsAnonymousCalls() throws Exception {
@@ -30,26 +33,33 @@ class StatReportControllerTest {
 
     @Test
     void servesDiagnosticsSyncAndAnalytics() throws Exception {
-        mockMvc.perform(get("/api/ads/diagnostics").with(user("tester")))
+        String registered = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"reports@api.test\",\"password\":\"pw-12345678\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String token = "Bearer " + objectMapper.readTree(registered).path("data").path("token").asText();
+
+        mockMvc.perform(get("/api/ads/diagnostics").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.ready").value(true))
                 .andExpect(jsonPath("$.data.checks[0].name").value("연동 모드"));
 
         // 적재 전에는 조회가 400 으로 안내한다.
-        mockMvc.perform(get("/api/ads/stat-reports/hourly").with(user("tester")))
+        mockMvc.perform(get("/api/ads/stat-reports/hourly").header("Authorization", token))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(post("/api/ads/stat-reports/sync").param("days", "1").with(user("tester")))
+        mockMvc.perform(post("/api/ads/stat-reports/sync").param("days", "1").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hourlyRows").value(480))
                 .andExpect(jsonPath("$.data.failures").isEmpty());
 
-        mockMvc.perform(get("/api/ads/stat-reports/hourly").param("device", "M").with(user("tester")))
+        mockMvc.perform(get("/api/ads/stat-reports/hourly").param("device", "M").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(24))
                 .andExpect(jsonPath("$.data[9].hour").value(9));
 
-        mockMvc.perform(get("/api/ads/stat-reports/conversions").with(user("tester")))
+        mockMvc.perform(get("/api/ads/stat-reports/conversions").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(10))
                 .andExpect(jsonPath("$.data[0].roas").isNumber());

@@ -1,5 +1,6 @@
 package com.marketingagent.integration.naver;
 
+import com.marketingagent.common.security.OwnerContext;
 import com.marketingagent.integration.naver.dto.ConversionRow;
 import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
@@ -60,7 +61,7 @@ public class StubSearchAdClient implements SearchAdClient {
         for (int i = 0; i < KEYWORDS.size(); i++) {
             keywords.add(new NccKeyword(
                     keywordId(i), ADGROUP_ID, KEYWORDS.get(i), "ELIGIBLE",
-                    overriddenBids.getOrDefault(keywordId(i), 500L + (i * 90L)), false, false));
+                    overriddenBids.getOrDefault(scoped(keywordId(i)), 500L + (i * 90L)), false, false));
         }
         return keywords;
     }
@@ -88,7 +89,7 @@ public class StubSearchAdClient implements SearchAdClient {
 
     @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
-        overriddenBids.put(nccKeywordId, bidAmt);
+        overriddenBids.put(scoped(nccKeywordId), bidAmt);
         return bidAmt;
     }
 
@@ -181,12 +182,12 @@ public class StubSearchAdClient implements SearchAdClient {
 
     @Override
     public void deleteKeyword(String nccKeywordId) {
-        overriddenBids.remove(nccKeywordId);
+        overriddenBids.remove(scoped(nccKeywordId));
     }
 
     @Override
     public List<RestrictedKeyword> listRestrictedKeywords(String nccAdgroupId) {
-        return List.copyOf(restricted.getOrDefault(nccAdgroupId, List.of()));
+        return List.copyOf(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
     }
 
     @Override
@@ -195,17 +196,17 @@ public class StubSearchAdClient implements SearchAdClient {
         for (String keyword : keywords) {
             added.add(new RestrictedKeyword("rst-stub-" + Math.abs(keyword.hashCode()), keyword, type));
         }
-        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
         all.addAll(added);
-        restricted.put(nccAdgroupId, all);
+        restricted.put(scoped(nccAdgroupId), all);
         return added;
     }
 
     @Override
     public void deleteRestrictedKeyword(String nccAdgroupId, String restrictedKeywordId) {
-        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
         all.removeIf(r -> r.id().equals(restrictedKeywordId));
-        restricted.put(nccAdgroupId, all);
+        restricted.put(scoped(nccAdgroupId), all);
     }
 
     private StatRow statRow(String id, LocalDate date) {
@@ -218,6 +219,11 @@ public class StubSearchAdClient implements SearchAdClient {
         double avgRnk = round2(1.0 + (seed % 60) / 10.0);
         long ccnt = clkCnt / 10;
         return new StatRow(id, date, impCnt, clkCnt, salesAmt, ctr, cpc, avgRnk, ccnt);
+    }
+
+    /** 기억해 둔 값이 회원끼리 섞이지 않게 키 앞에 소유자를 붙인다. */
+    private String scoped(String id) {
+        return OwnerContext.currentOwnerId() + ":" + id;
     }
 
     private String keywordId(int index) {

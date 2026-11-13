@@ -1,6 +1,6 @@
 package com.marketingagent.domain.ads;
 
-import com.marketingagent.common.BaseEntity;
+import com.marketingagent.common.OwnedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Lob;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @Table(name = "ad_reports")
-public class AdReport extends BaseEntity {
+public class AdReport extends OwnedEntity {
 
     @Column(nullable = false)
     private String title;

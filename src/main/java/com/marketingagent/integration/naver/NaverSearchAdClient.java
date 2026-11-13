@@ -35,6 +35,7 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * 네이버 검색광고 API 실제 클라이언트.
  * 모든 요청에 X-Timestamp / X-API-KEY / X-Customer / X-Signature 헤더를 붙인다.
+ * 자격증명은 요청마다 지금 일하고 있는 회원의 것을 받아 쓴다.
  */
 @Slf4j
 @Component
@@ -55,14 +56,14 @@ public class NaverSearchAdClient implements SearchAdClient {
     private final NaverSearchAdProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final NaverCredentialsProvider credentialsProvider;
 
-    public NaverSearchAdClient(NaverSearchAdProperties properties, ObjectMapper objectMapper) {
+    public NaverSearchAdClient(NaverSearchAdProperties properties, ObjectMapper objectMapper,
+            NaverCredentialsProvider credentialsProvider) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.credentialsProvider = credentialsProvider;
         this.restClient = RestClient.builder().baseUrl(properties.baseUrl()).build();
-        if (isBlank(properties.customerId()) || isBlank(properties.apiKey()) || isBlank(properties.secretKey())) {
-            log.warn("네이버 검색광고 자격증명이 비어 있습니다. NAVER_CUSTOMER_ID / NAVER_API_KEY / NAVER_SECRET_KEY 를 설정하세요.");
-        }
     }
 
     @Override
@@ -145,8 +146,9 @@ public class NaverSearchAdClient implements SearchAdClient {
     @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
         String path = "/ncc/keywords/" + nccKeywordId;
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "PUT", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
         URI uri = URI.create(properties.baseUrl() + path + "?fields=bidAmt");
 
         Map<String, Object> body = Map.of(
@@ -160,8 +162,8 @@ public class NaverSearchAdClient implements SearchAdClient {
             NccKeyword updated = restClient.put()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -192,15 +194,16 @@ public class NaverSearchAdClient implements SearchAdClient {
                 .toList();
         Map<String, Object> body = Map.of("device", device, "items", items, "keywordplus", false);
 
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
 
         try {
             JsonNode response = restClient.post()
                     .uri(URI.create(properties.baseUrl() + path))
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -387,14 +390,15 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     private JsonNode post(String pathWithQuery, Object body) {
         String path = pathWithQuery.split("\\?")[0];
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
         try {
             JsonNode response = restClient.post()
                     .uri(URI.create(properties.baseUrl() + pathWithQuery))
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -408,15 +412,16 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     private void delete(String path, String query) {
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "DELETE", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "DELETE", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
         try {
             restClient.delete()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .toBodilessEntity();
@@ -429,14 +434,15 @@ public class NaverSearchAdClient implements SearchAdClient {
     /** 리포트 다운로드 URL 은 별도 경로라 서명 경로를 그 URL 의 path 로 잡는다. */
     private String getRaw(String url) {
         URI uri = URI.create(url);
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "GET", uri.getPath());
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", uri.getPath());
         try {
             String body = RestClient.create().get()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .body(String.class);
@@ -448,16 +454,17 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     private <T> T get(String path, String query, ParameterizedTypeReference<T> type) {
+        NaverCredentials cred = credentialsProvider.current();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "GET", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
 
         try {
             T body = restClient.get()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .body(type);

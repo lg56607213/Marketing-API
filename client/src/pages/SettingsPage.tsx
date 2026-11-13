@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Shield, Zap, Database } from 'lucide-react'
+import { NaverAccountCard } from '@/features/account/NaverAccountCard'
 
 export function SettingsPage() {
   const { displayId, email, role } = useAuthStore()
@@ -15,7 +16,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>계정</CardTitle>
-          <CardDescription>관리자가 관리하는 계정 정보입니다.</CardDescription>
+          <CardDescription>로그인한 계정 정보입니다.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
@@ -36,6 +37,8 @@ export function SettingsPage() {
           </p>
         </CardContent>
       </Card>
+
+      <NaverAccountCard />
 
       {/* 시스템 정보 */}
       <Card>

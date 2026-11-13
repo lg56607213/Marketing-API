@@ -1,6 +1,6 @@
 package com.marketingagent.domain.ads;
 
-import com.marketingagent.common.BaseEntity;
+import com.marketingagent.common.OwnedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @Table(name = "bid_recommendations")
-public class BidRecommendation extends BaseEntity {
+public class BidRecommendation extends OwnedEntity {
 
     @Column(nullable = false, length = 100)
     private String nccKeywordId;

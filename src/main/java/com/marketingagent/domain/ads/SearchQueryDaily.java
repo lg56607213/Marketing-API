@@ -1,6 +1,6 @@
 package com.marketingagent.domain.ads;
 
-import com.marketingagent.common.BaseEntity;
+import com.marketingagent.common.OwnedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -18,8 +18,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Table(name = "search_query_daily",
         uniqueConstraints = @UniqueConstraint(name = "uk_search_query_daily",
-                columnNames = {"stat_date", "ncc_adgroup_id", "search_query", "device"}))
-public class SearchQueryDaily extends BaseEntity {
+                columnNames = {"owner_id", "stat_date", "ncc_adgroup_id", "search_query", "device"}))
+public class SearchQueryDaily extends OwnedEntity {
 
     @Column(name = "stat_date", nullable = false)
     private LocalDate statDate;

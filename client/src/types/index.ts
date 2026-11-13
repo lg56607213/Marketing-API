@@ -200,6 +200,16 @@ export interface AdHealth {
   message: string
 }
 
+/** 회원별 네이버 검색광고 계정 연결 상태. 비밀키는 서버가 돌려주지 않는다. */
+export interface NaverAccountStatus {
+  provider: string
+  connected: boolean
+  customerId: string | null
+  apiKeyMasked: string | null
+  connectedAt: string | null
+  message: string
+}
+
 export interface KeywordIdea {
   keyword: string
   pcCount: number

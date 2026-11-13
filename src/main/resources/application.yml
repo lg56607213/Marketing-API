@@ -34,6 +34,10 @@ jwt:
   secret: ${JWT_SECRET:ai-marketing-agent-secret-key-must-be-at-least-32-characters-long}
   expiration: ${JWT_EXPIRATION:86400000}
 
+security:
+  # 회원이 맡긴 네이버 키를 암호화하는 키. 운영에서는 반드시 고유한 값으로. 바꾸면 기존 연결은 다시 해야 한다
+  credential-key: ${CREDENTIAL_ENCRYPTION_KEY:dev-only-credential-key-change-me}
+
 ai:
   provider: ${AI_PROVIDER:stub}
   openai:

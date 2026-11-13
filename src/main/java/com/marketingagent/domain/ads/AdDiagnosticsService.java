@@ -1,5 +1,7 @@
 package com.marketingagent.domain.ads;
 
+import com.marketingagent.common.security.CurrentUser;
+import com.marketingagent.domain.ads.account.NaverAccountService;
 import com.marketingagent.domain.ads.dto.DiagnosticReport;
 import com.marketingagent.domain.ads.dto.DiagnosticReport.Check;
 import com.marketingagent.integration.naver.NaverSearchAdProperties;
@@ -32,6 +34,7 @@ public class AdDiagnosticsService {
 
     private final SearchAdClient searchAdClient;
     private final NaverSearchAdProperties properties;
+    private final NaverAccountService accountService;
 
     public DiagnosticReport run() {
         List<Check> checks = new ArrayList<>();
@@ -40,15 +43,15 @@ public class AdDiagnosticsService {
         if (stub) {
             checks.add(Check.warn("연동 모드",
                     "Stub 모드입니다. 아래 결과는 가짜 데이터 기준입니다. "
-                            + "실계정은 NAVER_SEARCHAD_PROVIDER=naver 와 자격증명 3종을 설정하세요."));
+                            + "실계정은 서버에 NAVER_SEARCHAD_PROVIDER=naver 를 설정하고 설정 화면에서 계정을 연결하세요."));
         } else {
             checks.add(Check.ok("연동 모드", "네이버 실계정 모드입니다."));
-            if (isBlank(properties.customerId()) || isBlank(properties.apiKey()) || isBlank(properties.secretKey())) {
-                checks.add(Check.fail("자격증명",
-                        "NAVER_CUSTOMER_ID / NAVER_API_KEY / NAVER_SECRET_KEY 중 비어 있는 값이 있습니다."));
+            if (!accountService.status(CurrentUser.id()).connected()) {
+                checks.add(Check.fail("계정 연결",
+                        "네이버 검색광고 계정이 연결되지 않았습니다. 설정 화면에서 고객 ID, 액세스 라이선스, 비밀키를 입력하세요."));
                 return report(checks);
             }
-            checks.add(Check.ok("자격증명", "3종이 모두 설정돼 있습니다."));
+            checks.add(Check.ok("계정 연결", "이 회원의 네이버 계정이 연결돼 있습니다."));
         }
 
         String keywordId = checkStructure(checks);
@@ -147,9 +150,5 @@ public class AdDiagnosticsService {
     private DiagnosticReport report(List<Check> checks) {
         boolean ready = checks.stream().noneMatch(check -> "FAIL".equals(check.status()));
         return new DiagnosticReport(properties.provider(), ready, checks);
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 }

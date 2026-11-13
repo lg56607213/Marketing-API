@@ -1,6 +1,6 @@
 package com.marketingagent.domain.ads;
 
-import com.marketingagent.common.BaseEntity;
+import com.marketingagent.common.OwnedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
@@ -19,10 +19,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Table(name = "keyword_conversion_hourly",
         uniqueConstraints = @UniqueConstraint(name = "uk_keyword_conversion_hourly",
-                columnNames = {"stat_date", "stat_hour", "ncc_adgroup_id", "ncc_keyword_id", "device",
+                columnNames = {"owner_id", "stat_date", "stat_hour", "ncc_adgroup_id", "ncc_keyword_id", "device",
                         "conv_method", "conv_type"}),
         indexes = @Index(name = "ix_keyword_conversion_hourly_keyword", columnList = "ncc_keyword_id, stat_date"))
-public class KeywordConversionHourly extends BaseEntity {
+public class KeywordConversionHourly extends OwnedEntity {
 
     public static final int METHOD_DIRECT = 1;
     public static final String TYPE_PURCHASE = "purchase";

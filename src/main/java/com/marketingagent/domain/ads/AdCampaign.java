@@ -1,19 +1,22 @@
 package com.marketingagent.domain.ads;
 
-import com.marketingagent.common.BaseEntity;
+import com.marketingagent.common.OwnedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(name = "ad_campaigns")
-public class AdCampaign extends BaseEntity {
+@Table(name = "ad_campaigns",
+        uniqueConstraints = @UniqueConstraint(name = "uk_ad_campaigns_owner",
+                columnNames = {"owner_id", "ncc_campaign_id"}))
+public class AdCampaign extends OwnedEntity {
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(name = "ncc_campaign_id", nullable = false, length = 100)
     private String nccCampaignId;
 
     @Column(nullable = false)
