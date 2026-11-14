@@ -147,7 +147,7 @@ public class NaverSearchAdClient implements SearchAdClient {
     @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
         String path = "/ncc/keywords/" + nccKeywordId;
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
         URI uri = URI.create(properties.baseUrl() + path + "?fields=bidAmt");
@@ -182,8 +182,28 @@ public class NaverSearchAdClient implements SearchAdClient {
         }
     }
 
+    /** 조사용 호출이 진행 중인지. 진행 중이면 운영자 계정으로 대신 조회할 수 있다. */
+    private final ThreadLocal<Boolean> researching = ThreadLocal.withInitial(() -> false);
+
+    private NaverCredentials credentials() {
+        return researching.get() ? credentialsProvider.research() : credentialsProvider.current();
+    }
+
+    private <T> T asResearch(java.util.function.Supplier<T> call) {
+        researching.set(true);
+        try {
+            return call.get();
+        } finally {
+            researching.remove();
+        }
+    }
+
     @Override
     public Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device) {
+        return asResearch(() -> doEstimateBidForPosition(keywords, position, device));
+    }
+
+    private Map<String, Long> doEstimateBidForPosition(List<String> keywords, int position, String device) {
         Map<String, Long> result = new LinkedHashMap<>();
         if (keywords.isEmpty()) {
             return result;
@@ -195,7 +215,7 @@ public class NaverSearchAdClient implements SearchAdClient {
                 .toList();
         Map<String, Object> body = Map.of("device", device, "items", items, "keywordplus", false);
 
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
 
@@ -226,6 +246,10 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<RelatedKeyword> relatedKeywords(List<String> hints) {
+        return asResearch(() -> doRelatedKeywords(hints));
+    }
+
+    private List<RelatedKeyword> doRelatedKeywords(List<String> hints) {
         if (hints.isEmpty()) {
             return List.of();
         }
@@ -391,7 +415,7 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     private JsonNode post(String pathWithQuery, Object body) {
         String path = pathWithQuery.split("\\?")[0];
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
         try {
@@ -417,6 +441,10 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        return asResearch(() -> doEstimatePerformance(queries, device));
+    }
+
+    private List<PerformanceEstimate> doEstimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
         List<PerformanceEstimate> result = new ArrayList<>();
         for (int from = 0; from < queries.size(); from += ESTIMATE_CHUNK) {
             List<Map<String, Object>> items = queries.subList(from, Math.min(from + ESTIMATE_CHUNK, queries.size()))
@@ -451,7 +479,7 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     private JsonNode put(String path, String query, Object body) {
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
         try {
@@ -473,7 +501,7 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     private void delete(String path, String query) {
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "DELETE", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
@@ -495,7 +523,7 @@ public class NaverSearchAdClient implements SearchAdClient {
     /** 리포트 다운로드 URL 은 별도 경로라 서명 경로를 그 URL 의 path 로 잡는다. */
     private String getRaw(String url) {
         URI uri = URI.create(url);
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", uri.getPath());
         try {
@@ -515,7 +543,7 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     private <T> T get(String path, String query, ParameterizedTypeReference<T> type) {
-        NaverCredentials cred = credentialsProvider.current();
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
         String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));

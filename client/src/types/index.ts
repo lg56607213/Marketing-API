@@ -275,6 +275,58 @@ export interface PlanProposal {
   basis: PlanBasis[]
 }
 
+export interface OnboardingProfile {
+  companyName: string
+  homepageUrl: string
+  businessDescription: string
+  keywords: string[]
+  monthlyBudget: number
+  targetConversions: number
+  saleValue: number | null
+  siteMonthlyVisitors: number | null
+  siteMonthlyConversions: number | null
+}
+
+export interface OnboardingAlternative {
+  key: 'INCREASE' | 'REQUESTED' | 'DECREASE'
+  label: string
+  monthlyBudget: number
+  dailyBudget: number
+  expectedCost: number
+  expectedClicks: number
+  expectedConversions: number
+  conversionsLow: number
+  conversionsHigh: number
+  goalRatePct: number
+  costPerConversion: number
+  revenue: number | null
+  roasPct: number | null
+  extraCostPerExtraConversion: number | null
+  keywordCount: number
+  recommended: boolean
+  effect: string
+  plan: PlanProposal
+}
+
+export interface OnboardingProposal {
+  profile: OnboardingProfile
+  siteCheck: {
+    reachable: boolean
+    title: string | null
+    description: string | null
+    naverTracking: boolean
+    googleAnalytics: boolean
+    hasForm: boolean
+    notes: string[]
+  }
+  alternatives: OnboardingAlternative[]
+  recommendedKey: string
+  recommendation: string
+  warnings: string[]
+  selectedOption: string | null
+  createdAt: string
+}
+
 export interface KeywordEfficiency {
   nccKeywordId: string
   keyword: string

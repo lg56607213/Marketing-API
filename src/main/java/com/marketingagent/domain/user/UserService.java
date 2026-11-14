@@ -19,8 +19,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.signup-enabled:true}")
+    private boolean signupEnabled;
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (!signupEnabled) {
+            throw new com.marketingagent.common.exception.BadRequestException("지금은 새 회원가입을 받지 않습니다. 관리자에게 문의하세요.");
+        }
         if (userRepository.existsByEmail(request.email())) {
             throw new DuplicateResourceException("Email already in use: " + request.email());
         }

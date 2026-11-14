@@ -1,6 +1,8 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  OnboardingProfile,
+  OnboardingProposal,
   AutopilotRun,
   AutopilotSettings,
   AutopilotSettingsRequest,
@@ -190,6 +192,15 @@ export const plannerApi = {
   generateBriefing: (period: BriefingPeriod) =>
     http.post<ApiResponse<Briefing>>('/ads/briefings', null, { params: { period } }).then(unwrap),
   briefings: () => http.get<ApiResponse<Briefing[]>>('/ads/briefings').then(unwrap),
+}
+
+// 업체 정보 등록 · 예산 3안 제안
+export const onboardingApi = {
+  current: () => http.get<ApiResponse<OnboardingProposal | null>>('/onboarding').then(unwrap),
+  submit: (profile: OnboardingProfile) =>
+    http.post<ApiResponse<OnboardingProposal>>('/onboarding', profile).then(unwrap),
+  select: (option: string) =>
+    http.post<ApiResponse<OnboardingProposal>>('/onboarding/select', null, { params: { option } }).then(unwrap),
 }
 
 // 자동 운영 · 광고비 대비 효율

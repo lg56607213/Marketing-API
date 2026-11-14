@@ -72,6 +72,52 @@ public class PlanService {
 
     @Transactional
     public PlanProposal propose(PlanRequest request) {
+        boolean byConversions = request.goalType() == GoalType.CONVERSIONS;
+        if (byConversions && (request.targetConversions() == null || request.targetConversions() <= 0)) {
+            throw new BadRequestException("월 목표 전환수를 1 이상으로 입력하세요.");
+        }
+        if (!byConversions && (request.monthlyBudget() == null || request.monthlyBudget() < MIN_MONTHLY_BUDGET)) {
+            throw new BadRequestException("월 예산을 " + MIN_MONTHLY_BUDGET + "원 이상으로 입력하세요.");
+        }
+        Research research = research(request);
+        PlanProposal draft = assemble(research, request.goalType(), request.targetConversions(),
+                request.monthlyBudget(), request.saleValue());
+        long targetConversions = byConversions ? request.targetConversions() : draft.expectedConversions();
+        return save(draft, targetConversions);
+    }
+
+    /**
+     * 같은 키워드 조사 결과로 예산만 달리한 여러 안을 만든다. 네이버 조회는 한 번만 하고 저장하지 않는다.
+     * 예산이 너무 작아 클릭을 살 수 없는 안은 예외를 던진다.
+     *
+     * @param request 핵심 키워드와 전환율·수익성 입력. goalType·monthlyBudget·targetConversions 는 쓰지 않는다
+     */
+    @Transactional(readOnly = true)
+    public List<PlanProposal> alternatives(PlanRequest request, List<Long> monthlyBudgets) {
+        Research research = research(request);
+        List<PlanProposal> result = new ArrayList<>();
+        for (Long budget : monthlyBudgets) {
+            if (budget == null || budget < MIN_MONTHLY_BUDGET) {
+                throw new BadRequestException("월 예산을 " + MIN_MONTHLY_BUDGET + "원 이상으로 입력하세요.");
+            }
+            result.add(assemble(research, GoalType.BUDGET, null, budget, request.saleValue()));
+        }
+        return result;
+    }
+
+    /** 만들어 둔 안을 현재 운영 계획으로 저장한다. 브리핑과 자동 운영이 이 목표를 기준으로 삼는다. */
+    @Transactional
+    public PlanProposal save(PlanProposal draft, long targetConversions) {
+        MarketingPlan saved = planRepository.save(new MarketingPlan(draft.goalType().name(), draft.monthlyBudget(),
+                targetConversions, draft.targetCpa(), toJson(draft)));
+        log.info("운영 계획 저장: 목표 {} / 월 {}원 / 기대 전환 {}건 / 키워드 {}개",
+                draft.goalType(), draft.monthlyBudget(), draft.expectedConversions(),
+                draft.keywords().stream().filter(PlanKeyword::selected).count());
+        return withId(draft, saved.getId());
+    }
+
+    /** 키워드 후보·예측·전환율처럼 예산과 무관한 조사를 한 번에 해 둔다. */
+    private Research research(PlanRequest request) {
         List<String> seeds = request.seedKeywords().stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(String::trim)
@@ -80,32 +126,34 @@ public class PlanService {
         if (seeds.isEmpty()) {
             throw new BadRequestException("핵심 키워드를 1개 이상 입력하세요.");
         }
-        boolean byConversions = request.goalType() == GoalType.CONVERSIONS;
-        if (byConversions && (request.targetConversions() == null || request.targetConversions() <= 0)) {
-            throw new BadRequestException("월 목표 전환수를 1 이상으로 입력하세요.");
-        }
-        if (!byConversions && (request.monthlyBudget() == null || request.monthlyBudget() < MIN_MONTHLY_BUDGET)) {
-            throw new BadRequestException("월 예산을 " + MIN_MONTHLY_BUDGET + "원 이상으로 입력하세요.");
-        }
-
-        List<String> assumptions = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<Basis> basis = new ArrayList<>();
 
         Cvr cvr = resolveCvr(request, warnings);
         basis.add(new Basis("전환율", String.format("%.2f%% (범위 %.2f%% ~ %.2f%%)", cvr.pct(), cvr.lowPct(), cvr.highPct()),
                 cvr.source(), cvr.grade()));
-
         Long maxCpc = maxCpc(request, cvr, basis);
 
         List<Candidate> candidates = findCandidates(seeds, warnings, basis);
         if (candidates.isEmpty()) {
             throw new BadRequestException("입력한 키워드로는 검색량이 있는 후보를 찾지 못했습니다. 더 일반적인 키워드로 다시 시도하세요.");
         }
+        return new Research(seeds, cvr, maxCpc, candidates, warnings, basis);
+    }
 
-        long budgetCap = byConversions ? Long.MAX_VALUE : request.monthlyBudget();
+    /** 조사 결과에 목표나 예산을 적용해 계획 한 건을 만든다. 저장하지 않는다. */
+    private PlanProposal assemble(Research research, GoalType goalType, Long goalConversions, Long goalBudget,
+            Long saleValue) {
+        boolean byConversions = goalType == GoalType.CONVERSIONS;
+        Cvr cvr = research.cvr();
+        Long maxCpc = research.maxCpc();
+        List<Candidate> candidates = research.candidates();
+        List<String> assumptions = new ArrayList<>();
+        List<String> warnings = new ArrayList<>(research.warnings());
+
+        long budgetCap = byConversions ? Long.MAX_VALUE : goalBudget;
         long clicksNeeded = byConversions
-                ? (long) Math.ceil(request.targetConversions() / (cvr.pct() / 100.0))
+                ? (long) Math.ceil(goalConversions / (cvr.pct() / 100.0))
                 : Long.MAX_VALUE;
 
         Allocation allocation = allocate(candidates, clicksNeeded, budgetCap, maxCpc);
@@ -136,17 +184,23 @@ public class PlanService {
         if (byConversions && clicks < clicksNeeded) {
             warnings.add(String.format(
                     "목표 %,d건에 못 미칩니다. %s 기대할 수 있는 전환은 월 %,d건 안팎입니다. 핵심 키워드를 넓히거나 목표를 낮추세요.",
-                    request.targetConversions(),
+                    goalConversions,
                     allocation.blockedByMaxCpc()
                             ? String.format("수익이 남는 클릭 단가 한도(%,d원)를 넘는 클릭은 사지 않았기 때문입니다. 이 한도 안에서", maxCpc)
                             : "후보 키워드의 예상 클릭이 모자랍니다. 이 키워드들로",
                     expectedConversions));
         }
+        if (!byConversions && cost < goalBudget * 0.9) {
+            warnings.add(String.format(
+                    "이 키워드들로는 월 %,d원 중 약 %,d원까지만 쓸 수 있습니다. %s",
+                    goalBudget, cost, allocation.blockedByMaxCpc()
+                            ? "수익이 남는 클릭 단가 한도를 넘는 클릭은 사지 않았기 때문입니다."
+                            : "예상 클릭이 그만큼밖에 없기 때문입니다. 더 쓰려면 핵심 키워드를 넓혀야 합니다."));
+        }
 
-        long monthlyBudget = byConversions ? roundUp(cost, 10_000) : request.monthlyBudget();
+        long monthlyBudget = byConversions ? roundUp(cost, 10_000) : goalBudget;
         long dailyBudget = roundUp((long) Math.ceil(monthlyBudget / 30.0), 1_000);
         long targetCpa = expectedConversions == 0 ? 0 : cost / expectedConversions;
-        long targetConversions = byConversions ? request.targetConversions() : expectedConversions;
 
         assumptions.add("예상 클릭·비용은 네이버가 최근 실적으로 계산한 예측입니다. 계절과 경쟁 상황에 따라 달라지며, 보통 첫 2주 실적으로 보정합니다.");
         assumptions.add("키워드마다 입찰가를 4단계로 예측받아, 추가 클릭 한 번이 가장 싼 단계부터 골랐습니다. "
@@ -155,17 +209,11 @@ public class PlanService {
             assumptions.add("전환율은 실측이 아닙니다. 이 계획에서 가장 불확실한 숫자이므로 아래 시나리오의 범위로 읽으세요.");
         }
 
-        PlanProposal draft = new PlanProposal(null, request.goalType(), seeds, monthlyBudget, dailyBudget, clicks,
+        return new PlanProposal(null, goalType, research.seeds(), monthlyBudget, dailyBudget, clicks,
                 expectedConversions, targetCpa, round2(cvr.pct()), cvr.source(),
-                scenarios(clicks, cost, cvr, request.saleValue()), keywords, assumptions,
+                scenarios(clicks, cost, cvr, saleValue), keywords, assumptions,
                 steps(dailyBudget, targetCpa, keywords), warnings, LocalDateTime.now(),
-                round2(cvr.lowPct()), round2(cvr.highPct()), maxCpc, basis);
-
-        MarketingPlan saved = planRepository.save(new MarketingPlan(request.goalType().name(), monthlyBudget,
-                targetConversions, targetCpa, toJson(draft)));
-        log.info("운영 계획 제안: 목표 {} / 월 {}원 / 기대 전환 {}건 / 키워드 {}개 / 전환율 근거 {}",
-                request.goalType(), monthlyBudget, expectedConversions, allocation.chosen().size(), cvr.grade());
-        return withId(draft, saved.getId());
+                round2(cvr.lowPct()), round2(cvr.highPct()), maxCpc, research.basis());
     }
 
     @Transactional(readOnly = true)
@@ -518,6 +566,9 @@ public class PlanService {
      */
     private record Candidate(String keyword, long searches, String competition, List<Point> points, Point reference,
             boolean relevant) {}
+
+    private record Research(List<String> seeds, Cvr cvr, Long maxCpc, List<Candidate> candidates,
+            List<String> warnings, List<Basis> basis) {}
 
     private record Allocation(Map<String, Point> chosen, long clicks, long cost, boolean blockedByMaxCpc) {}
 }

@@ -17,6 +17,7 @@ import { CompetitorAnalysisPage } from '@/pages/analytics/CompetitorAnalysisPage
 import { PlanPage } from '@/pages/analytics/PlanPage'
 import { BriefingPage } from '@/pages/analytics/BriefingPage'
 import { AutopilotPage } from '@/pages/analytics/AutopilotPage'
+import { OnboardingPage } from '@/pages/OnboardingPage'
 import { AIHistoryPage } from '@/pages/AIHistoryPage'
 import { ImageLibraryPage } from '@/pages/ImageLibraryPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/analytics/market" element={<MarketIntelligencePage />} />
           <Route path="/analytics/channels" element={<ChannelAnalyticsPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/analytics/plan" element={<PlanPage />} />
           <Route path="/analytics/briefings" element={<BriefingPage />} />
           <Route path="/analytics/autopilot" element={<AutopilotPage />} />

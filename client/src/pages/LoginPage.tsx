@@ -34,8 +34,8 @@ export function LoginPage() {
         ? await authApi.register(toApiEmail(loginId), password)
         : await authApi.login(toApiEmail(loginId), password)
       login(auth)
-      // 가입 직후에는 네이버 광고 계정 연결부터 하도록 설정 화면으로 보낸다.
-      navigate(isSignup ? '/settings' : '/dashboard')
+      // 가입 직후에는 업체 정보와 광고 목표부터 받아 제안을 보여 준다.
+      navigate(isSignup ? '/onboarding' : '/dashboard')
     } catch (err) {
       const status = (err as { response?: { status?: number } }).response?.status
       if (isSignup) {

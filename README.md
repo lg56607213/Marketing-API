@@ -48,6 +48,24 @@ Java 21, Spring Boot 3, JPA 기반의 AI 마케팅 콘텐츠 생성 + 네이버 
 `NAVER_SYNC_ENABLED=true` 이면 일 배치가 계정 구조·일자별 성과에 이어 시간대별 성과·전환·검색어 리포트까지
 최근 `NAVER_REPORT_SYNC_DAYS`(기본 7)일치를 매일 다시 받는다. 간접전환이 며칠 뒤에 잡히기 때문이다.
 
+### 업체 등록 · 예산 3안 제안
+가입한 회원이 업체명·홈페이지·사업 내용·핵심 키워드·월 광고 가능 예산·월 목표 건수를 적으면,
+홈페이지를 확인하고 예산 세 가지 안의 기대 효과를 비교해 돌려준다. 광고 계정은 바꾸지 않는다.
+- GET /api/onboarding — 내 업체 정보와 마지막 제안
+- POST /api/onboarding — 업체 정보 등록 후 제안 받기
+- POST /api/onboarding/select?option=INCREASE|REQUESTED|DECREASE — 고른 안을 현재 운영 계획으로 저장
+
+세 안은 같은 키워드 조사에 예산만 달리 적용한다: 증액(요청의 1.5배) / 요청대로 / 감액(요청의 0.6배).
+안마다 예상 지출·클릭·전환(범위 포함)·전환 1건당 비용·추가 전환 1건의 값·매출·광고수익률을 내고,
+목표를 채우는 안 중 가장 싼 것을 추천한다. 어느 안도 목표에 닿지 않으면 그렇게 알린다.
+
+홈페이지 확인은 첫 화면을 한 번 열어 네이버 전환 추적·구글 애널리틱스·문의 양식이 보이는지만 본다.
+내부망 주소는 열지 않는다(http/https 기본 포트, 공인 주소만).
+
+키워드 검색량·입찰가 추정 같은 조사용 조회는 회원이 아직 네이버 계정을 연결하지 않았어도 되도록,
+회원 계정이 없으면 기본 관리자 계정에 연결된 네이버 키로 대신 조회한다. 그 계정의 광고 데이터는 회원에게 보이지 않는다.
+실계정 모드에서는 관리자 계정에 네이버 키가 연결돼 있어야 새 회원이 제안을 받을 수 있다.
+
 ### 운영 계획 · 브리핑
 직원 없이 광고를 운영하는 소기업을 위한 기능. 이 두 가지는 제안과 보고만 하고 광고 계정은 바꾸지 않는다.
 - POST /api/ads/plans/propose — 월 목표 전환수 또는 월 예산을 주면 키워드·입찰가·예산·기대 성과(보수/기본/낙관)·운영 방법을 제안
@@ -225,6 +243,24 @@ curl -X POST -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/ads/sy
 - 하루 반영 최대 50건 (`ADS_BID_MAX_DAILY_APPLIES`)
 - 노출 100회 미만 키워드는 추천에서 제외 (`ADS_BID_MIN_IMPRESSIONS`)
 - 재분석 시 기존 대기 건은 SUPERSEDED 처리되어 오래된 근거로 승인되지 않음
+
+## 내 PC 에서 도메인으로 공개하기 (Cloudflare Tunnel)
+
+도메인이 Cloudflare 에 있으면, 서버를 따로 빌리지 않고 이 PC 를 켜 둔 동안만 `https://marketing.내도메인` 으로 열 수 있습니다.
+PC 를 끄거나 실행 창을 닫으면 그 주소만 닫히고, 같은 도메인의 다른 사이트에는 영향이 없습니다.
+
+```powershell
+winget install --id Cloudflare.cloudflared
+powershell -ExecutionPolicy Bypass -File scripts\setup-tunnel.ps1 -Hostname marketing.내도메인
+powershell -ExecutionPolicy Bypass -File scripts\run-public.ps1
+```
+
+- `setup-tunnel.ps1` 은 처음 한 번만 실행합니다. 브라우저에서 Cloudflare 로그인을 승인하면 터널과 DNS 레코드 한 줄이 만들어집니다.
+- `run-public.ps1` 은 화면을 빌드해 서버와 같은 포트(8090)로 내보내고 터널을 연결합니다. 코드를 바꾼 뒤에는 `-Rebuild` 를 붙입니다.
+- 처음 실행할 때 `public.env` 가 만들어집니다. 무작위 비밀값과 관리자 비밀번호(아이디 `admin`)가 들어 있고 저장소에는 올라가지 않습니다.
+- 공개 모드에서는 H2 콘솔과 Swagger 가 꺼지고, 기본 비밀값이 남아 있으면 서버가 뜨지 않으며, 서버는 이 PC 안(127.0.0.1)에서만 받습니다.
+- 회원가입은 기본으로 막혀 있습니다. 다른 사람을 받으려면 `public.env` 의 `APP_SIGNUP_ENABLED` 를 `true` 로 바꿉니다.
+- 데이터는 `data-public/` 에 따로 쌓입니다. 일 배치(오전 5시 30분)는 그 시각에 PC 가 켜져 있어야 돕니다.
 
 ## MySQL 전환
 

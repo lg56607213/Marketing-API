@@ -39,6 +39,7 @@ client/.cache/
 
 ### Local DB ###
 data/
+data-public/
 
 ### TS build info ###
 client/*.tsbuildinfo

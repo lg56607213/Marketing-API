@@ -23,6 +23,7 @@ const analyticsItems = [
   { to: '/analytics', icon: BarChart3, label: '개요', exact: true },
   { to: '/analytics/market', icon: TrendingUp, label: '마켓 인텔리전스', exact: false },
   { to: '/analytics/channels', icon: Radio, label: '채널 애널리틱스', exact: false },
+  { to: '/onboarding', icon: Building2, label: '업체 정보 · 광고 제안', exact: false },
   { to: '/analytics/plan', icon: Target, label: '운영 계획', exact: false },
   { to: '/analytics/briefings', icon: ClipboardList, label: '운영 브리핑', exact: false },
   { to: '/analytics/autopilot', icon: Bot, label: '자동 운영', exact: false },

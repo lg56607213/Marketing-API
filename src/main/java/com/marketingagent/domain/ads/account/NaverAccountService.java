@@ -27,9 +27,15 @@ public class NaverAccountService implements NaverCredentialsProvider {
     private final NaverSearchAdProperties properties;
     private final SearchAdClient searchAdClient;
 
+    static final String PLATFORM_ADMIN_EMAIL = "admin@marketing.local";
+
+    private final com.marketingagent.domain.user.UserRepository userRepository;
+
     /** 클라이언트가 이 서비스에서 자격증명을 받아 가므로 순환 참조를 피하려고 늦게 주입한다. */
     public NaverAccountService(NaverAccountRepository repository, CredentialCipher cipher,
-            NaverSearchAdProperties properties, @Lazy SearchAdClient searchAdClient) {
+            NaverSearchAdProperties properties, @Lazy SearchAdClient searchAdClient,
+            com.marketingagent.domain.user.UserRepository userRepository) {
+        this.userRepository = userRepository;
         this.repository = repository;
         this.cipher = cipher;
         this.properties = properties;
@@ -46,6 +52,22 @@ public class NaverAccountService implements NaverCredentialsProvider {
         NaverAccount account = repository.findByUserId(ownerId)
                 .orElseThrow(() -> new BadRequestException(
                         "네이버 검색광고 계정이 연결되지 않았습니다. 설정 화면에서 먼저 연결하세요."));
+        return new NaverCredentials(account.getCustomerId(),
+                cipher.decrypt(account.getApiKeyEnc()), cipher.decrypt(account.getSecretKeyEnc()));
+    }
+
+    /** 회원 자신의 계정이 없으면 운영자(기본 관리자) 계정으로 조사용 조회를 한다. */
+    @Override
+    @Transactional(readOnly = true)
+    public NaverCredentials research() {
+        Long ownerId = OwnerContext.currentOwnerId();
+        NaverAccount account = ownerId == null ? null : repository.findByUserId(ownerId).orElse(null);
+        if (account == null) {
+            account = userRepository.findByEmail(PLATFORM_ADMIN_EMAIL)
+                    .flatMap(admin -> repository.findByUserId(admin.getId()))
+                    .orElseThrow(() -> new BadRequestException(
+                            "키워드 조사에 쓸 네이버 검색광고 계정이 없습니다. 설정에서 내 계정을 연결하거나, 운영자가 관리자 계정에 네이버 키를 연결해야 합니다."));
+        }
         return new NaverCredentials(account.getCustomerId(),
                 cipher.decrypt(account.getApiKeyEnc()), cipher.decrypt(account.getSecretKeyEnc()));
     }

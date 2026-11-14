@@ -23,12 +23,26 @@ public class DataInitializer implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final NaverAccountService accountService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.admin-password:}")
+    private String configuredAdminPassword;
+
     @Override
     public void run(ApplicationArguments args) {
+        boolean configured = configuredAdminPassword != null && !configuredAdminPassword.isBlank();
         if (!userRepository.existsByEmail(ADMIN_EMAIL)) {
-            User admin = new User(ADMIN_EMAIL, passwordEncoder.encode(ADMIN_PASSWORD), UserRole.ADMIN);
+            User admin = new User(ADMIN_EMAIL,
+                    passwordEncoder.encode(configured ? configuredAdminPassword : ADMIN_PASSWORD), UserRole.ADMIN);
             userRepository.save(admin);
             log.info("Default admin account created: {}", ADMIN_EMAIL);
+        } else if (configured) {
+            // 널리 알려진 기본 비밀번호로 만들어진 관리자 계정을 설정한 비밀번호로 맞춘다.
+            userRepository.findByEmail(ADMIN_EMAIL).ifPresent(admin -> {
+                if (!passwordEncoder.matches(configuredAdminPassword, admin.getPassword())) {
+                    admin.changePassword(passwordEncoder.encode(configuredAdminPassword));
+                    userRepository.save(admin);
+                    log.info("관리자 계정의 비밀번호를 설정값으로 바꿨습니다.");
+                }
+            });
         }
         // 예전에는 네이버 키를 환경변수로 하나만 받았다. 그 키가 남아 있으면 관리자 계정의 연결로 옮겨 둔다.
         userRepository.findByEmail(ADMIN_EMAIL).ifPresent(admin -> {

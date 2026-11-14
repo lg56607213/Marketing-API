@@ -39,7 +39,9 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/brand/**", "/api/template/**", "/api/prompt/**").permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        // 나머지는 화면 파일(index.html, js, css)이다. 데이터는 모두 /api 뒤에 있다.
+                        .anyRequest().permitAll()
                 )
                 .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
                 .authenticationProvider(authenticationProvider())
