@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Sparkles, ArrowRight } from 'lucide-react'
+import { Search, ArrowRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { brandApi } from '@/services/api'
-import type { BrandResponse } from '@/types'
+import { brandApi, marketApi } from '@/services/api'
+import type { BrandResponse, MarketKeyword } from '@/types'
 import { cn } from '@/lib/utils'
-
-const EXAMPLE_TOPICS = ['대출 상품', '모기지 금리', '개인 재무 팁', '부동산 시장', '투자 전략', '보험 상품']
-
-const MI_TRENDING = [
-  { topic: '담보대출', score: 92, keywords: ['담보대출', 'LTV', 'DSR'] },
-  { topic: 'DSR 규제', score: 85, keywords: ['DSR', '규제완화', '대출한도'] },
-  { topic: '대출 갈아타기', score: 61, keywords: ['갈아타기', '금리비교', '중도상환'] },
-  { topic: '생애최초 대출', score: 68, keywords: ['생애최초', 'LTV', '주택구입'] },
-]
 
 interface Props {
   topic: string
@@ -28,6 +19,9 @@ interface Props {
 
 export function Step1Topic({ topic, brandId, onTopicChange, onBrandChange, onKeywordsChange }: Props) {
   const [brands, setBrands] = useState<BrandResponse[]>([])
+  // 내 업체 키워드로 조회한 실제 검색 수요. 업체 정보가 없거나 조회에 실패하면 비워 둔다.
+  const [popular, setPopular] = useState<MarketKeyword[]>([])
+  const [seeds, setSeeds] = useState<string[]>([])
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -35,51 +29,57 @@ export function Step1Topic({ topic, brandId, onTopicChange, onBrandChange, onKey
       setBrands(list)
       if (list.length > 0 && !brandId) onBrandChange(list[0].id)
     }).catch(() => {})
+    marketApi.keywords().then((market) => {
+      setSeeds(market.seeds)
+      setPopular(market.keywords.filter((k) => k.relevant).slice(0, 4))
+    }).catch(() => {})
   }, [])
 
-  const handleMiSelect = (item: typeof MI_TRENDING[0]) => {
-    onTopicChange(item.topic)
-    onKeywordsChange?.(item.keywords)
+  const pick = (item: MarketKeyword) => {
+    onTopicChange(item.keyword)
+    onKeywordsChange?.([item.keyword])
   }
 
   return (
     <div className="space-y-6">
-      {/* 마켓 인텔리전스 추천 배너 */}
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-indigo-500" />
-            <p className="text-sm font-semibold text-indigo-700">마켓 인텔리전스 추천</p>
-          </div>
-          <button
-            onClick={() => navigate('/analytics/market')}
-            className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
-          >
-            전체 보기 <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {MI_TRENDING.map((item) => (
+      {popular.length > 0 ? (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-indigo-500" />
+              <p className="text-sm font-semibold text-indigo-700">내 업종에서 많이 검색되는 말</p>
+            </div>
             <button
-              key={item.topic}
-              onClick={() => handleMiSelect(item)}
-              className={cn(
-                'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-all hover:border-indigo-400 hover:bg-white',
-                topic === item.topic ? 'border-indigo-500 bg-white' : 'border-indigo-100 bg-white/60'
-              )}
+              onClick={() => navigate('/analytics/market')}
+              className="flex items-center gap-1 text-xs font-medium text-indigo-500 transition-colors hover:text-indigo-700"
             >
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 truncate">{item.topic}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{item.keywords.join(' · ')}</p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <TrendingUp className="h-3 w-3 text-emerald-500" />
-                <span className="text-[10px] font-bold text-emerald-600">{item.score}</span>
-              </div>
+              전체 보기 <ArrowRight className="h-3 w-3" />
             </button>
-          ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {popular.map((item) => (
+              <button
+                key={item.keyword}
+                onClick={() => pick(item)}
+                className={cn(
+                  'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-all hover:border-indigo-400 hover:bg-white',
+                  topic === item.keyword ? 'border-indigo-500 bg-white' : 'border-indigo-100 bg-white/60'
+                )}
+              >
+                <p className="min-w-0 truncate text-xs font-semibold text-slate-800">{item.keyword}</p>
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  월 {item.totalSearches.toLocaleString()}회 검색
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground">네이버의 최근 한 달 검색수입니다.</p>
         </div>
-      </div>
+      ) : (
+        <p className="rounded-md border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+          <a href="/onboarding" className="underline">업체 정보</a>를 등록하면 내 업종에서 실제로 많이 검색되는 말을 여기에 보여 줍니다.
+        </p>
+      )}
 
       <div className="space-y-1.5">
         <Label>브랜드 선택</Label>
@@ -104,27 +104,29 @@ export function Step1Topic({ topic, brandId, onTopicChange, onBrandChange, onKey
       <div className="space-y-1.5">
         <Label>콘텐츠 주제</Label>
         <Input
-          placeholder="예: 대출, 모기지, 금융, 부동산..."
+          placeholder="무엇에 대해 쓸지 적어 주세요. 예: 우리 상품을 고를 때 확인할 점"
           value={topic}
           onChange={(e) => onTopicChange(e.target.value)}
           className="text-base"
         />
       </div>
 
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">주제 예시:</p>
-        <div className="flex flex-wrap gap-2">
-          {EXAMPLE_TOPICS.map((t) => (
-            <Card
-              key={t}
-              className={`cursor-pointer transition-all hover:border-indigo-400 ${topic === t ? 'border-indigo-500 bg-indigo-50' : ''}`}
-              onClick={() => onTopicChange(t)}
-            >
-              <CardContent className="px-3 py-1.5 text-sm">{t}</CardContent>
-            </Card>
-          ))}
+      {seeds.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">내 핵심 키워드로 시작하기:</p>
+          <div className="flex flex-wrap gap-2">
+            {seeds.map((t) => (
+              <Card
+                key={t}
+                className={`cursor-pointer transition-all hover:border-indigo-400 ${topic === t ? 'border-indigo-500 bg-indigo-50' : ''}`}
+                onClick={() => onTopicChange(t)}
+              >
+                <CardContent className="px-3 py-1.5 text-sm">{t}</CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

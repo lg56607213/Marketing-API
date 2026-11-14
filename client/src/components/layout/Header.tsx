@@ -11,7 +11,7 @@ const pageTitles: Record<string, string> = {
   '/onboarding': '업체 정보 · 광고 제안',
   '/analytics/briefings': '운영 브리핑',
   '/analytics/autopilot': '자동 운영',
-  '/analytics/market': '마켓 인텔리전스',
+  '/analytics/market': '시장 · 키워드 수요',
   '/analytics/channels': '채널 애널리틱스',
   '/analytics/competitors': '경쟁사 분석',
   '/analytics': '마케팅 인텔리전스 — 개요',

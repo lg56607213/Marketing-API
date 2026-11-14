@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { contentApi } from '@/services/api'
+import { AdOverview } from '@/features/ads/AdOverview'
 import { useAuthStore } from '@/store/authStore'
 import type { ContentResponse } from '@/types'
 import { CONTENT_TYPE_LABELS, STATUS_LABELS } from '@/types'
@@ -45,13 +46,16 @@ export function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">안녕하세요, {displayId}님 👋</h2>
-          <p className="text-muted-foreground text-sm mt-1">오늘의 마케팅 콘텐츠 현황을 확인하세요.</p>
+          <p className="text-muted-foreground text-sm mt-1">최근 30일 광고 실적과 콘텐츠 현황입니다.</p>
         </div>
         <Button onClick={() => navigate('/content/new')} className="gap-2">
           <Plus className="h-4 w-4" />
           콘텐츠 생성
         </Button>
       </div>
+
+      {/* 광고 실적 (실제 수집 데이터) */}
+      <AdOverview />
 
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

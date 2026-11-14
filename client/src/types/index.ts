@@ -275,6 +275,64 @@ export interface PlanProposal {
   basis: PlanBasis[]
 }
 
+export interface HourOfDay {
+  hour: number
+  impCnt: number
+  clkCnt: number
+  salesAmt: number
+  ctr: number
+  cpc: number
+  avgRnk: number
+  convCnt: number
+  convAmt: number
+  cpa: number
+  roas: number
+}
+
+export interface MarketKeyword {
+  keyword: string
+  pcSearches: number
+  mobileSearches: number
+  totalSearches: number
+  mobileSharePct: number
+  monthlyClicks: number
+  competition: string
+  bidRank1: number | null
+  bidRank3: number | null
+  bidRank5: number | null
+  crowdRatio: number | null
+  relevant: boolean
+  opportunity: boolean
+}
+
+export interface MarketOverview {
+  seeds: string[]
+  seedSource: string
+  totalSearches: number
+  medianBidRank3: number
+  highCompetitionPct: number
+  mobileSharePct: number
+  keywords: MarketKeyword[]
+  insights: string[]
+}
+
+export interface SiteCheck {
+  reachable: boolean
+  title: string | null
+  description: string | null
+  naverTracking: boolean
+  googleAnalytics: boolean
+  hasForm: boolean
+  notes: string[]
+}
+
+export interface CompetitorReport {
+  sites: { url: string; mine: boolean; check: SiteCheck }[]
+  keywordCompetition: MarketKeyword[]
+  findings: string[]
+  limits: string[]
+}
+
 export interface OnboardingProfile {
   companyName: string
   homepageUrl: string

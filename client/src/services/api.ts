@@ -1,6 +1,9 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  CompetitorReport,
+  HourOfDay,
+  MarketOverview,
   OnboardingProfile,
   OnboardingProposal,
   AutopilotRun,
@@ -192,6 +195,16 @@ export const plannerApi = {
   generateBriefing: (period: BriefingPeriod) =>
     http.post<ApiResponse<Briefing>>('/ads/briefings', null, { params: { period } }).then(unwrap),
   briefings: () => http.get<ApiResponse<Briefing[]>>('/ads/briefings').then(unwrap),
+}
+
+// 시장(키워드 수요·경쟁) · 경쟁사 비교
+export const marketApi = {
+  keywords: (seeds?: string) =>
+    http.get<ApiResponse<MarketOverview>>('/market/keywords', { params: { seeds } }).then(unwrap),
+  competitors: (urls: string[]) =>
+    http.post<ApiResponse<CompetitorReport>>('/market/competitors', { urls }).then(unwrap),
+  hourly: (since?: string, until?: string) =>
+    http.get<ApiResponse<HourOfDay[]>>('/ads/stat-reports/hourly', { params: { since, until } }).then(unwrap),
 }
 
 // 업체 정보 등록 · 예산 3안 제안
