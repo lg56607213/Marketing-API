@@ -8,6 +8,7 @@ import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
 import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
@@ -408,6 +409,66 @@ public class NaverSearchAdClient implements SearchAdClient {
         } catch (RestClientResponseException e) {
             log.error("네이버 API POST 실패 {} -> {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("네이버 API 호출에 실패했습니다: " + e.getResponseBodyAsString());
+        }
+    }
+
+    /** 성과 예측은 한 번에 200건까지 받는다. */
+    private static final int ESTIMATE_CHUNK = 200;
+
+    @Override
+    public List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        List<PerformanceEstimate> result = new ArrayList<>();
+        for (int from = 0; from < queries.size(); from += ESTIMATE_CHUNK) {
+            List<Map<String, Object>> items = queries.subList(from, Math.min(from + ESTIMATE_CHUNK, queries.size()))
+                    .stream()
+                    .map(q -> Map.<String, Object>of("device", device, "keyword", q.keyword(), "bid", q.bid()))
+                    .toList();
+            JsonNode response = post("/estimate/performance-bulk", Map.of("items", items));
+            for (JsonNode node : response.path("items")) {
+                result.add(new PerformanceEstimate(node.path("keyword").asText(), node.path("bid").asLong(),
+                        node.path("impressions").asLong(), node.path("clicks").asLong(),
+                        node.path("cost").asLong()));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public long updateCampaignDailyBudget(String nccCampaignId, long dailyBudget) {
+        JsonNode updated = put("/ncc/campaigns/" + nccCampaignId, "fields=budget", Map.of(
+                "nccCampaignId", nccCampaignId,
+                "dailyBudget", dailyBudget,
+                "useDailyBudget", true));
+        return updated.path("dailyBudget").asLong(dailyBudget);
+    }
+
+    @Override
+    public void setKeywordPaused(String nccKeywordId, String nccAdgroupId, boolean paused) {
+        put("/ncc/keywords/" + nccKeywordId, "fields=userLock", Map.of(
+                "nccKeywordId", nccKeywordId,
+                "nccAdgroupId", nccAdgroupId,
+                "userLock", paused));
+    }
+
+    private JsonNode put(String path, String query, Object body) {
+        NaverCredentials cred = credentialsProvider.current();
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
+        try {
+            JsonNode response = restClient.put()
+                    .uri(URI.create(properties.baseUrl() + path + "?" + query))
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
+                    .header("X-Signature", signature)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            return response != null ? response : objectMapper.createObjectNode();
+        } catch (RestClientResponseException e) {
+            log.error("네이버 API PUT 실패 {} -> {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BadRequestException("네이버 API 변경에 실패했습니다: " + e.getResponseBodyAsString());
         }
     }
 

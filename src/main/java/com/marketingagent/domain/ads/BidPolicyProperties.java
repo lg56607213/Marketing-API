@@ -3,7 +3,7 @@ package com.marketingagent.domain.ads;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 입찰가 조정 가드레일. 자동 반영은 없으며, 승인된 건에 대해서도 여기 한도를 넘길 수 없다.
+ * 입찰가 조정 가드레일. 사용자가 승인한 건이든 자동 운영이 승인한 건이든 여기 한도를 넘길 수 없다.
  *
  * @param targetCpa       목표 전환당 비용. 0이면 계정 평균 CPA를 기준으로 삼는다.
  * @param lookbackDays    성과 분석 구간
@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param minBid          입찰가 하한
  * @param maxBid          입찰가 상한
  * @param maxDailyApplies 하루에 반영할 수 있는 최대 건수
- * @param dryRun          true 면 승인해도 네이버에 실제 반영하지 않고 기록만 남긴다
+ * @param dryRun          true 면 승인해도(자동 운영 포함) 네이버에 실제 반영하지 않고 기록만 남긴다
  */
 @ConfigurationProperties("ads.bid")
 public record BidPolicyProperties(

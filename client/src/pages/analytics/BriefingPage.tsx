@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, ClipboardList, Loader2, Minus, TrendingDown, TrendingUp, HelpCircle } from 'lucide-react'
+import { AlertCircle, ClipboardList, Loader2, Minus, Printer, TrendingDown, TrendingUp, HelpCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,14 @@ const VERDICT: Record<BriefingVerdict, { label: string; short: string; icon: typ
   HOLD: { short: '유지', label: '지금 수준을 유지하세요', icon: Minus, className: 'border-slate-300 bg-slate-50 text-slate-900' },
   DECREASE: { short: '감액', label: '광고비를 줄이거나 새는 곳부터 막으세요', icon: TrendingDown, className: 'border-red-500/40 bg-red-50 text-red-900' },
   NEED_DATA: { short: '보류', label: '아직 판단하기 이릅니다', icon: HelpCircle, className: 'border-amber-500/40 bg-amber-50 text-amber-900' },
+}
+
+const PERIOD_LABEL: Record<BriefingPeriod, string> = { DAILY: '일간', WEEKLY: '주간', MONTHLY: '월간' }
+
+const EFFICIENCY_TONE: Record<string, string> = {
+  올리기: 'border-emerald-500/50 text-emerald-800',
+  내리기: 'border-red-500/50 text-red-800',
+  '중지 검토': 'border-red-500/50 bg-red-50 text-red-800',
 }
 
 export function BriefingPage() {
@@ -59,10 +67,15 @@ export function BriefingPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          광고 운영 결과를 일간·주간으로 보고합니다. 자동 수집이 켜져 있으면 매일 아침 만들어집니다.
+          광고 운영 결과를 일간·주간·월간으로 보고합니다. 자동 수집이 켜져 있으면 매일 아침 만들어집니다.
         </p>
-        <div className="flex gap-2">
-          {([['DAILY', '어제 브리핑 만들기'], ['WEEKLY', '주간 브리핑 만들기']] as [BriefingPeriod, string][]).map(
+        <div className="flex flex-wrap gap-2 print:hidden">
+          {briefings.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => window.print()} className="gap-2">
+              <Printer className="h-4 w-4" /> 인쇄 · PDF 저장
+            </Button>
+          )}
+          {([['DAILY', '어제 브리핑'], ['WEEKLY', '주간 브리핑'], ['MONTHLY', '월간 분석 보고서']] as [BriefingPeriod, string][]).map(
             ([period, label]) => (
               <Button key={period} size="sm" variant={period === 'WEEKLY' ? 'default' : 'outline'}
                 disabled={generating !== null} onClick={() => void generate(period)} className="gap-2">
@@ -89,14 +102,14 @@ export function BriefingPage() {
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
-          <Card className="h-fit">
+          <Card className="h-fit print:hidden">
             <CardContent className="p-2">
               {briefings.map((b) => (
                 <button key={b.id} type="button" onClick={() => setSelectedId(b.id)}
                   className={cn('w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50',
                     b.id === selectedId && 'bg-muted')}>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{b.period === 'DAILY' ? '일간' : '주간'}</span>
+                    <span className="font-medium">{PERIOD_LABEL[b.period]}</span>
                     <Badge variant="outline" className="text-[10px]">{VERDICT[b.verdict].short}</Badge>
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -137,7 +150,7 @@ export function BriefingPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">지표</CardTitle>
                   <CardDescription className="text-xs">
-                    비교 기준: {briefing.period === 'DAILY' ? '직전 7일의 하루 평균' : '직전 7일'}
+                    비교 기준: {briefing.period === 'DAILY' ? '직전 7일의 하루 평균' : briefing.period === 'WEEKLY' ? '직전 7일' : '직전 30일'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -190,10 +203,88 @@ export function BriefingPage() {
                 </Card>
               )}
 
+              {(briefing.efficiency ?? []).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">키워드별 광고비 대비 효율</CardTitle>
+                    <CardDescription className="text-xs">
+                      최근 28일 · {briefing.efficiencyBasis}. 「쓸 수 있는 단가」는 전환율 × 전환 1건에 쓸 수 있는 돈입니다.
+                      실제 클릭 단가가 이보다 높으면 손해 보는 클릭입니다.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/40 text-xs text-muted-foreground">
+                            <th className="px-6 py-2.5 text-left font-semibold">키워드</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">광고비</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">전환</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">전환당 비용</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">실제 클릭 단가</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">쓸 수 있는 단가</th>
+                            <th className="px-3 py-2.5 text-right font-semibold">입찰가</th>
+                            <th className="px-6 py-2.5 text-left font-semibold">판정</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {briefing.efficiency.map((k) => (
+                            <tr key={k.nccKeywordId} title={k.reason}>
+                              <td className="px-6 py-2.5 font-medium">{k.keyword}</td>
+                              <td className="px-3 py-2.5 text-right">{fmt(k.cost, '원')}</td>
+                              <td className="px-3 py-2.5 text-right">{fmt(k.conversions, '건')}</td>
+                              <td className="px-3 py-2.5 text-right">{k.conversions > 0 ? fmt(k.cpa, '원') : '-'}</td>
+                              <td className="px-3 py-2.5 text-right">{fmt(k.actualCpc, '원')}</td>
+                              <td className="px-3 py-2.5 text-right">{fmt(k.maxCpc, '원')}</td>
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                                {k.suggestedBid === k.currentBid
+                                  ? fmt(k.currentBid, '원')
+                                  : `${fmt(k.currentBid, '원')} → ${fmt(k.suggestedBid, '원')}`}
+                              </td>
+                              <td className="px-6 py-2.5">
+                                <Badge variant="outline" className={cn('whitespace-nowrap text-[10px]', EFFICIENCY_TONE[k.verdict])}>
+                                  {k.verdict}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {briefing.autopilotSummary && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">자동 운영이 한 일</CardTitle>
+                    <CardDescription className="text-xs">{briefing.autopilotSummary}</CardDescription>
+                  </CardHeader>
+                  {(briefing.autopilotActions ?? []).length > 0 && (
+                    <CardContent>
+                      <ul className="space-y-3 text-sm">
+                        {briefing.autopilotActions.map((a) => (
+                          <li key={`${a.type}-${a.target}`}>
+                            <span className="flex flex-wrap items-baseline gap-x-2">
+                              <Badge variant="outline" className="text-[10px]">{a.type}</Badge>
+                              <span className="font-medium">{a.target}</span>
+                              <span>{a.before} → {a.after}</span>
+                              <span className="text-xs text-muted-foreground">({a.status})</span>
+                            </span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">{a.reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  )}
+                </Card>
+              )}
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">권장 조치</CardTitle>
-                  <CardDescription className="text-xs">최근 14일 기준입니다. 실행은 입찰가 조정·키워드 화면에서 합니다.</CardDescription>
+                  <CardDescription className="text-xs">최근 14일 기준입니다. 자동 운영을 켜 두면 입찰가·중지·일예산은 대신 처리하고, 나머지는 직접 합니다.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {briefing.actions.length === 0 ? (

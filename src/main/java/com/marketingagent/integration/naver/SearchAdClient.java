@@ -5,6 +5,7 @@ import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
 import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
@@ -45,6 +46,24 @@ public interface SearchAdClient {
      * @return 키워드 문자열 -> 추정 입찰가
      */
     Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device);
+
+    /**
+     * 키워드를 주어진 입찰가로 걸었을 때의 예상 월간 노출·클릭·비용을 네이버에서 받아온다.
+     * 응답에 없는 조합은 결과에서 빠진다.
+     *
+     * @param device PC, MOBILE 또는 BOTH
+     */
+    List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device);
+
+    /**
+     * 캠페인 일예산을 바꾼다. 자동 운영 또는 사용자 승인을 거친 건에서만 호출해야 한다.
+     *
+     * @return 반영 후 일예산
+     */
+    long updateCampaignDailyBudget(String nccCampaignId, long dailyBudget);
+
+    /** 키워드 노출을 끄거나 켠다. 자동 운영 또는 사용자 승인을 거친 건에서만 호출해야 한다. */
+    void setKeywordPaused(String nccKeywordId, String nccAdgroupId, boolean paused);
 
     /**
      * 키워드도구로 연관 키워드와 월간 검색량을 조회한다.

@@ -21,6 +21,9 @@ export function PlanPage() {
   const [budget, setBudget] = useState('')
   const [saleValue, setSaleValue] = useState('')
   const [cvr, setCvr] = useState('')
+  const [visitors, setVisitors] = useState('')
+  const [inquiries, setInquiries] = useState('')
+  const [roas, setRoas] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,6 +66,9 @@ export function PlanPage() {
           monthlyBudget: goalType === 'BUDGET' ? toNumber(budget) : null,
           saleValue: saleValue ? toNumber(saleValue) : null,
           assumedCvrPct: cvr ? toNumber(cvr) : null,
+          siteMonthlyVisitors: visitors ? toNumber(visitors) : null,
+          siteMonthlyConversions: inquiries ? toNumber(inquiries) : null,
+          targetRoasPct: roas ? toNumber(roas) : null,
         })
       )
     } catch (err) {
@@ -76,7 +82,9 @@ export function PlanPage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        목표를 알려주면 어떤 키워드에 얼마를 써서 어떤 결과를 기대할 수 있는지 제안합니다. 제안만 하고 광고 계정은 바꾸지 않습니다.
+        목표를 알려주면 어떤 키워드에 얼마를 써서 어떤 결과를 기대할 수 있는지 제안합니다. 클릭수와 단가는 네이버의 성과 예측에서,
+        전환율은 내 광고나 내 사이트의 실제 수치에서 가져오고, 어느 숫자가 실측이고 어느 숫자가 가정인지 함께 보여 줍니다.
+        이 화면은 제안만 하고 광고 계정은 바꾸지 않습니다.
       </p>
 
       <Card>
@@ -133,9 +141,34 @@ export function PlanPage() {
                   onChange={(e) => setSaleValue(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="plan-cvr">전환율 가정 (%, 선택)</Label>
-                <Input id="plan-cvr" inputMode="decimal" placeholder="비우면 2%" value={cvr}
-                  onChange={(e) => setCvr(e.target.value)} />
+                <Label htmlFor="plan-roas">목표 광고수익률 (%, 선택)</Label>
+                <Input id="plan-roas" inputMode="numeric" placeholder="비우면 본전(100%) 기준" value={roas}
+                  onChange={(e) => setRoas(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="rounded-md border bg-muted/20 p-4">
+              <p className="text-sm font-medium">전환율 근거</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                광고 실적이 충분하면 그 전환율을 씁니다. 아직 없다면 사이트의 최근 한 달 방문자수와 문의·구매 건수를 넣어 주세요.
+                둘 다 없을 때만 가정값을 씁니다.
+              </p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="plan-visitors">사이트 월 방문자수</Label>
+                  <Input id="plan-visitors" inputMode="numeric" placeholder="예: 2000" value={visitors}
+                    onChange={(e) => setVisitors(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="plan-inquiries">같은 기간 문의·구매 건수</Label>
+                  <Input id="plan-inquiries" inputMode="numeric" placeholder="예: 40" value={inquiries}
+                    onChange={(e) => setInquiries(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="plan-cvr">전환율 가정 (%, 실측이 없을 때만)</Label>
+                  <Input id="plan-cvr" inputMode="decimal" placeholder="비우면 2%" value={cvr}
+                    onChange={(e) => setCvr(e.target.value)} />
+                </div>
               </div>
             </div>
 
@@ -185,7 +218,8 @@ export function PlanPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">기대 효과</CardTitle>
               <CardDescription className="text-xs">
-                예상 클릭 {num(plan.expectedClicks)}회 기준. 전환율이 달라지면 결과가 이렇게 바뀝니다.
+                예상 클릭 {num(plan.expectedClicks)}회 기준. 전환율 {plan.cvrPct}% ({plan.cvrSource})
+                {plan.maxCpc != null && ` · 수익이 남는 클릭 단가 한도 ${won(plan.maxCpc)}`}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -222,7 +256,7 @@ export function PlanPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">키워드 계획</CardTitle>
               <CardDescription className="text-xs">
-                「포함」 키워드를 추천 입찰가로 등록하면 됩니다. 나머지는 예산·목표 안에 들지 않아 뺀 후보입니다.
+                「포함」 키워드를 표의 입찰가로 등록하면 됩니다. 추가 클릭이 싼 순서로 골랐고, 나머지는 예산·목표·수익 한도 안에 들지 않아 뺀 후보입니다.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -234,7 +268,8 @@ export function PlanPage() {
                       <th className="px-3 py-2.5 text-left font-semibold">계획</th>
                       <th className="px-3 py-2.5 text-right font-semibold">월 검색수</th>
                       <th className="px-3 py-2.5 text-left font-semibold">경쟁</th>
-                      <th className="px-3 py-2.5 text-right font-semibold">추천 입찰가</th>
+                      <th className="px-3 py-2.5 text-right font-semibold">입찰가</th>
+                      <th className="px-3 py-2.5 text-right font-semibold">예상 클릭 단가</th>
                       <th className="px-3 py-2.5 text-right font-semibold">예상 클릭</th>
                       <th className="px-6 py-2.5 text-right font-semibold">예상 비용</th>
                     </tr>
@@ -251,6 +286,7 @@ export function PlanPage() {
                         <td className="px-3 py-2.5 text-right">{num(k.monthlySearches)}</td>
                         <td className="px-3 py-2.5">{k.competition}</td>
                         <td className="px-3 py-2.5 text-right">{won(k.suggestedBid)}</td>
+                        <td className="px-3 py-2.5 text-right">{k.expectedCpc > 0 ? won(k.expectedCpc) : '-'}</td>
                         <td className="px-3 py-2.5 text-right">{k.selected ? num(k.expectedClicks) : '-'}</td>
                         <td className="px-6 py-2.5 text-right">{k.selected ? won(k.expectedCost) : '-'}</td>
                       </tr>
@@ -260,6 +296,38 @@ export function PlanPage() {
               </div>
             </CardContent>
           </Card>
+
+          {(plan.basis ?? []).length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">숫자의 근거</CardTitle>
+                <CardDescription className="text-xs">
+                  실측은 내 계정·내 사이트의 실제 값, 네이버 예측은 네이버가 최근 실적으로 계산한 값, 가정은 뒷받침할 데이터가 없는 값입니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y">
+                      {plan.basis.map((b) => (
+                        <tr key={b.item}>
+                          <td className="whitespace-nowrap px-6 py-2.5 font-medium">{b.item}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">{b.value}</td>
+                          <td className="px-3 py-2.5">
+                            <Badge variant={b.grade === '가정' ? 'outline' : 'default'}
+                              className={cn('whitespace-nowrap text-[10px]', b.grade === '가정' && 'border-amber-500/50 text-amber-800')}>
+                              {b.grade}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-2.5 text-muted-foreground">{b.source}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
@@ -275,8 +343,8 @@ export function PlanPage() {
             </Card>
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">계산에 쓴 가정</CardTitle>
-                <CardDescription className="text-xs">이 가정이 틀리면 결과도 달라집니다.</CardDescription>
+                <CardTitle className="text-base">읽을 때 주의할 점</CardTitle>
+                <CardDescription className="text-xs">예측은 실제와 다를 수 있습니다. 첫 2~4주 실적으로 다시 계산하세요.</CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="list-disc space-y-2 pl-5 text-sm">

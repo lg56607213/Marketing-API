@@ -8,4 +8,5 @@ public interface BidRecommendationRepository extends JpaRepository<BidRecommenda
     List<BidRecommendation> findByStatusOrderByIdDesc(BidStatus status);
     List<BidRecommendation> findByStatusInOrderByIdDesc(List<BidStatus> statuses);
     long countByStatusAndDecidedAtAfter(BidStatus status, LocalDateTime after);
+    List<BidRecommendation> findByStatusAndDecidedAtAfter(BidStatus status, LocalDateTime after);
 }

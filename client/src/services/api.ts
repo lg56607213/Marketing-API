@@ -1,6 +1,10 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  AutopilotRun,
+  AutopilotSettings,
+  AutopilotSettingsRequest,
+  EfficiencyAnalysis,
   AuthResponse,
   BrandRequest,
   BrandResponse,
@@ -186,6 +190,17 @@ export const plannerApi = {
   generateBriefing: (period: BriefingPeriod) =>
     http.post<ApiResponse<Briefing>>('/ads/briefings', null, { params: { period } }).then(unwrap),
   briefings: () => http.get<ApiResponse<Briefing[]>>('/ads/briefings').then(unwrap),
+}
+
+// 자동 운영 · 광고비 대비 효율
+export const autopilotApi = {
+  settings: () => http.get<ApiResponse<AutopilotSettings>>('/ads/autopilot').then(unwrap),
+  update: (request: AutopilotSettingsRequest) =>
+    http.put<ApiResponse<AutopilotSettings>>('/ads/autopilot', request).then(unwrap),
+  run: (preview: boolean) =>
+    http.post<ApiResponse<AutopilotRun>>('/ads/autopilot/run', null, { params: { preview } }).then(unwrap),
+  runs: () => http.get<ApiResponse<AutopilotRun[]>>('/ads/autopilot/runs').then(unwrap),
+  efficiency: () => http.get<ApiResponse<EfficiencyAnalysis>>('/ads/efficiency').then(unwrap),
 }
 
 // 자연검색 (SEO)

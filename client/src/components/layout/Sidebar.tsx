@@ -5,6 +5,7 @@ import {
   TrendingUp, Radio, Globe, MousePointerClick, Gavel, FileBarChart, Lightbulb, ListFilter, Globe2,
   Target,
   ClipboardList,
+  Bot,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ const analyticsItems = [
   { to: '/analytics/channels', icon: Radio, label: '채널 애널리틱스', exact: false },
   { to: '/analytics/plan', icon: Target, label: '운영 계획', exact: false },
   { to: '/analytics/briefings', icon: ClipboardList, label: '운영 브리핑', exact: false },
+  { to: '/analytics/autopilot', icon: Bot, label: '자동 운영', exact: false },
   { to: '/analytics/ads', icon: MousePointerClick, label: '검색광고 성과', exact: false },
   { to: '/analytics/bids', icon: Gavel, label: '입찰가 조정', exact: false },
   { to: '/analytics/ad-report', icon: FileBarChart, label: 'AI 광고 리포트', exact: false },

@@ -18,10 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 입찰가 조정 추천을 만들고, 사용자가 승인한 건만 네이버에 반영한다.
+ * 입찰가 조정 추천을 만들고, 승인된 건만 네이버에 반영한다.
  *
- * <p>설계 원칙: 자동 반영은 없다. 추천 생성과 반영은 완전히 분리되어 있으며,
- * 반영은 반드시 {@link #approve} 를 통해서만 일어난다.
+ * <p>설계 원칙: 추천 생성과 반영은 완전히 분리되어 있으며, 반영은 반드시 {@link #approve} 를 통해서만 일어난다.
+ * 승인하는 쪽은 사용자이거나, 회원이 켜 둔 자동 운영이다. 어느 쪽이든 같은 가드레일을 거친다.
  */
 @Slf4j
 @Service

@@ -10,6 +10,12 @@ import com.marketingagent.domain.ads.AdCampaignRepository;
 import com.marketingagent.domain.ads.AdKeyword;
 import com.marketingagent.domain.ads.AdKeywordRepository;
 import com.marketingagent.domain.ads.BidPolicyProperties;
+import com.marketingagent.domain.ads.EfficiencyBidService;
+import com.marketingagent.domain.ads.EfficiencyBidService.Analysis;
+import com.marketingagent.domain.ads.EfficiencyBidService.KeywordEfficiency;
+import com.marketingagent.domain.ads.EfficiencyBidService.Targets;
+import com.marketingagent.domain.ads.autopilot.AutopilotDtos;
+import com.marketingagent.domain.ads.autopilot.AutopilotService;
 import com.marketingagent.domain.ads.KeywordConversionHourlyRepository;
 import com.marketingagent.domain.ads.KeywordStatDailyRepository;
 import com.marketingagent.domain.ads.dto.KeywordAggregate;
@@ -55,6 +61,7 @@ public class BriefingService {
     private static final double OVER_PLAN_RATIO = 1.1;
     private static final long MIN_WASTE_AMOUNT = 5_000;
     private static final int MAX_ACTIONS_PER_TYPE = 5;
+    private static final int MAX_EFFICIENCY_ROWS = 15;
 
     private final KeywordStatDailyRepository statRepository;
     private final KeywordConversionHourlyRepository conversionRepository;
@@ -63,6 +70,8 @@ public class BriefingService {
     private final MarketingPlanRepository planRepository;
     private final BriefingRepository briefingRepository;
     private final BidPolicyProperties bidPolicy;
+    private final EfficiencyBidService efficiencyBidService;
+    private final AutopilotService autopilotService;
     private final AiProvider aiProvider;
     private final ObjectMapper objectMapper;
 
@@ -81,9 +90,14 @@ public class BriefingService {
     @Transactional
     public Briefing generate(BriefingPeriod period, LocalDate until) {
         boolean daily = period == BriefingPeriod.DAILY;
-        LocalDate since = daily ? until : until.minusDays(6);
+        int days = daily ? 1 : period == BriefingPeriod.WEEKLY ? 7 : 30;
+        // 일간은 하루치를 직전 7일의 하루 평균과, 주간·월간은 같은 길이의 직전 기간과 비교한다.
+        int baseDays = daily ? 7 : days;
+        String periodLabel = daily ? "일간" : period == BriefingPeriod.WEEKLY ? "주간" : "월간";
+        String compare = daily ? "직전 7일의 하루 평균" : "직전 " + baseDays + "일";
+        LocalDate since = until.minusDays(days - 1L);
         LocalDate baseUntil = since.minusDays(1);
-        LocalDate baseSince = baseUntil.minusDays(6);
+        LocalDate baseSince = baseUntil.minusDays(baseDays - 1L);
         LocalDate judgeSince = until.minusDays(JUDGE_DAYS - 1L);
 
         List<KeywordAggregate> judgeRows = statRepository.aggregateByKeyword(judgeSince, until);
@@ -107,19 +121,42 @@ public class BriefingService {
         Decision decision = decide(judge, target, dailyBudget, pacing);
         List<Action> actions = actions(judgeRows, judge, target);
 
-        String ctrComment = ctrComment(current, base, daily);
-        String cvrComment = cvrComment(current, base, judge, daily);
+        String ctrComment = ctrComment(current, base, compare);
+        String cvrComment = cvrComment(current, base, judge, daily, compare);
         String headline = String.format("[%s] 광고비 %,d원 · 클릭 %,d회 · 전환 %,d건 · 판단: %s",
-                daily ? "일간" : "주간", current.cost(), current.clk(), current.conv(), label(decision.verdict()));
+                periodLabel, current.cost(), current.clk(), current.conv(), label(decision.verdict()));
+
+        // 키워드별 광고비 대비 효율. 데이터가 모자라면 계산하지 않고 이유만 적는다.
+        String efficiencyBasis;
+        List<KeywordEfficiency> efficiency = List.of();
+        String efficiencyComment = null;
+        try {
+            Analysis analysis = efficiencyBidService.analyze(
+                    new Targets(target.cpa(), autopilotService.targets().targetRoasPct(), target.source()), until);
+            efficiencyBasis = analysis.targetLabel();
+            efficiency = analysis.keywords().stream().limit(MAX_EFFICIENCY_ROWS).toList();
+            efficiencyComment = efficiencyComment(analysis);
+        } catch (BadRequestException e) {
+            efficiencyBasis = e.getMessage();
+        }
+        AutopilotDtos.RunResult autopilot = until.equals(LocalDate.now().minusDays(1))
+                ? autopilotService.todaysRun().orElse(null) : null;
 
         List<String> narrative = new ArrayList<>();
-        narrative.add(summary(current, base, since, until, daily));
+        narrative.add(summary(current, base, since, until, daily, compare));
         narrative.add(ctrComment);
         narrative.add(cvrComment);
         if (pacing != null) {
             narrative.add(pacing.comment());
         }
+        if (efficiencyComment != null) {
+            narrative.add(efficiencyComment);
+        }
         narrative.add("광고비 판단: " + decision.reason());
+        if (autopilot != null) {
+            narrative.add("자동 운영이 오늘 한 일: " + autopilot.summary()
+                    + (autopilot.notes().isEmpty() ? "" : " " + String.join(" ", autopilot.notes())));
+        }
 
         String generatedBy = "rule-based";
         if (!"stub".equalsIgnoreCase(aiProviderName)) {
@@ -132,7 +169,9 @@ public class BriefingService {
 
         Briefing draft = new Briefing(null, period, since, until, headline, decision.verdict(), decision.reason(),
                 dailyBudget, decision.suggestedDailyBudget(), metrics(current, base), pacing, ctrComment,
-                cvrComment, actions, narrative, generatedBy, LocalDateTime.now());
+                cvrComment, actions, narrative, generatedBy, LocalDateTime.now(), efficiencyBasis, efficiency,
+                autopilot != null ? autopilot.summary() : null,
+                autopilot != null ? autopilot.actions() : List.of());
 
         String json = toJson(draft);
         BriefingRecord record = briefingRepository.findByPeriodAndUntil(period.name(), until).orElse(null);
@@ -155,13 +194,11 @@ public class BriefingService {
 
     // --- 판단 ---
 
-    /** 목표 전환당 비용. 계획이 있으면 계획, 없으면 설정값, 그것도 없으면 최근 30일 평균을 기준으로 삼는다. */
+    /** 목표 전환당 비용. 자동 운영 설정 → 운영 계획 → 서버 설정 순이고, 아무것도 없으면 최근 30일 평균을 기준으로 삼는다. */
     private Target resolveTarget(MarketingPlan plan, LocalDate until) {
-        if (plan != null && plan.getTargetCpa() > 0) {
-            return new Target(plan.getTargetCpa(), "운영 계획의 목표");
-        }
-        if (bidPolicy.targetCpa() > 0) {
-            return new Target(bidPolicy.targetCpa(), "서버 설정의 목표");
+        Targets configured = autopilotService.targets();
+        if (configured.targetCpa() > 0) {
+            return new Target(configured.targetCpa(), configured.source());
         }
         Totals month = totals(until.minusDays(29), until);
         return new Target((long) month.cpa(), "목표가 없어 최근 30일 평균을 기준으로 삼음");
@@ -221,13 +258,16 @@ public class BriefingService {
                     basis, why), null);
         }
         if (cpa >= target.cpa() * BAD_CPA_RATIO) {
-            Long suggested = dailyBudget > 0 ? Math.max(1_000, (long) (dailyBudget * 0.8) / 1_000 * 1_000) : null;
+            long lowered = Math.max(1_000, (long) (dailyBudget * 0.8) / 1_000 * 1_000);
+            // 이미 최저 수준이면 더 줄이라고 권할 수 없다.
+            Long suggested = dailyBudget > 0 && lowered < dailyBudget ? lowered : null;
+            String next = suggested != null ? String.format("일예산을 %,d원으로 20%% 줄이세요.", suggested)
+                    : dailyBudget > 0 ? "일예산은 이미 최저 수준이라 더 줄일 수 없으니, 입찰가를 낮추거나 효율이 나쁜 키워드를 끄는 수밖에 없습니다."
+                    : "캠페인에 일예산을 걸어 지출을 제한하세요.";
             return new Decision(Verdict.DECREASE, String.format(
                     "%s. 목표보다 30%% 이상 비쌉니다. 예산을 일괄로 깎기 전에 아래 조치의 전환 없는 키워드부터 정리하세요. "
                             + "정리 후에도 1주 동안 나아지지 않으면 %s",
-                    basis, suggested != null
-                            ? String.format("일예산을 %,d원으로 20%% 줄이세요.", suggested)
-                            : "캠페인에 일예산을 걸어 지출을 제한하세요."), suggested);
+                    basis, next), suggested);
         }
         return new Decision(Verdict.HOLD, basis + ". 목표 범위 안이므로 지금 수준을 유지하세요.", null);
     }
@@ -297,16 +337,38 @@ public class BriefingService {
 
     // --- 문장 ---
 
-    private String summary(Totals current, Totals base, LocalDate since, LocalDate until, boolean daily) {
+    /** 키워드 효율 계산을 한 문단으로 줄인다. */
+    private String efficiencyComment(Analysis analysis) {
+        long up = analysis.keywords().stream().filter(k -> "올리기".equals(k.verdict())).count();
+        long down = analysis.keywords().stream().filter(k -> "내리기".equals(k.verdict())).count();
+        long stop = analysis.keywords().stream().filter(k -> "중지 검토".equals(k.verdict())).count();
+        long wasted = analysis.keywords().stream().filter(k -> "중지 검토".equals(k.verdict()))
+                .mapToLong(KeywordEfficiency::cost).sum();
+        StringBuilder text = new StringBuilder(String.format(
+                "키워드 효율(최근 %d일, %s): 키워드마다 클릭 한 번에 쓸 수 있는 돈과 실제 클릭 단가를 비교했습니다. "
+                        + "입찰가를 올려도 되는 키워드 %d개, 내려야 하는 키워드 %d개",
+                EfficiencyBidService.WINDOW_DAYS, analysis.targetLabel(), up, down));
+        if (stop > 0) {
+            text.append(String.format(", 전환 없이 %,d원을 쓴 키워드 %d개", wasted, stop));
+        }
+        long watching = analysis.keywords().stream().filter(k -> "지켜보는 중".equals(k.verdict())).count();
+        if (watching > 0) {
+            text.append(String.format(", 최근 입찰가를 바꿔 결과를 지켜보는 키워드 %d개", watching));
+        }
+        text.append("입니다. 아래 표에 키워드별 계산이 있습니다.");
+        return text.toString();
+    }
+
+    private String summary(Totals current, Totals base, LocalDate since, LocalDate until, boolean daily,
+            String compare) {
         String range = daily ? until.toString() : since + " ~ " + until;
-        String compare = daily ? "직전 7일의 하루 평균" : "직전 7일";
         return String.format("%s 동안 광고비 %,d원으로 노출 %,d회, 클릭 %,d회, 전환 %,d건을 얻었습니다. %s과 비교하면 광고비 %s, 클릭 %s, 전환 %s입니다.",
                 range, current.cost(), current.imp(), current.clk(), current.conv(), compare,
                 change(current.cost(), base.cost()), change(current.clk(), base.clk()),
                 change(current.conv(), base.conv()));
     }
 
-    private String ctrComment(Totals current, Totals base, boolean daily) {
+    private String ctrComment(Totals current, Totals base, String compare) {
         if (current.imp() == 0) {
             return "클릭률: 이 기간에 광고가 노출되지 않았습니다. 캠페인이 꺼져 있거나 예산·입찰가가 너무 낮지 않은지 확인하세요.";
         }
@@ -314,10 +376,10 @@ public class BriefingService {
         String level = ctr < 1.0 ? "낮은 편입니다. 광고 문구와 키워드가 검색 의도와 맞는지 점검하세요"
                 : ctr < 3.0 ? "보통 수준입니다" : "좋은 편입니다";
         return String.format("클릭률: %.2f%%로 %s (이 도구의 기준: 1%% 미만 낮음, 3%% 이상 좋음). %s 대비 %s.",
-                ctr, level, daily ? "직전 7일 평균" : "직전 7일", change(ctr, base.ctr()));
+                ctr, level, compare, change(ctr, base.ctr()));
     }
 
-    private String cvrComment(Totals current, Totals base, Totals judge, boolean daily) {
+    private String cvrComment(Totals current, Totals base, Totals judge, boolean daily, String compare) {
         if (judge.conv() == 0) {
             return "전환율: 최근 14일 동안 전환이 잡히지 않아 평가할 수 없습니다.";
         }
@@ -328,7 +390,7 @@ public class BriefingService {
         return String.format("전환율: %.2f%%(클릭 %,d회 중 %,d건), 전환당 비용 %s. %s 대비 전환율 %s.%s",
                 current.cvr(), current.clk(), current.conv(),
                 current.conv() == 0 ? "계산 불가" : String.format("%,d원", (long) current.cpa()),
-                daily ? "직전 7일 평균" : "직전 7일", change(current.cvr(), base.cvr()), note);
+                compare, change(current.cvr(), base.cvr()), note);
     }
 
     private String aiComment(List<String> narrative, List<Action> actions) {
@@ -410,7 +472,9 @@ public class BriefingService {
     private Briefing withId(Briefing b, Long id) {
         return new Briefing(id, b.period(), b.since(), b.until(), b.headline(), b.verdict(), b.verdictReason(),
                 b.currentDailyBudget(), b.suggestedDailyBudget(), b.metrics(), b.pacing(), b.ctrComment(),
-                b.cvrComment(), b.actions(), b.narrative(), b.generatedBy(), b.createdAt());
+                b.cvrComment(), b.actions(), b.narrative(), b.generatedBy(), b.createdAt(), b.efficiencyBasis(),
+                b.efficiency() != null ? b.efficiency() : List.of(), b.autopilotSummary(),
+                b.autopilotActions() != null ? b.autopilotActions() : List.of());
     }
 
     private String toJson(Briefing briefing) {

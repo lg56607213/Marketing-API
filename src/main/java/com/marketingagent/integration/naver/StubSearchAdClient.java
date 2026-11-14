@@ -6,6 +6,7 @@ import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
 import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
@@ -32,6 +33,10 @@ public class StubSearchAdClient implements SearchAdClient {
     /** Stub 에서 승인된 입찰가 변경을 기억해 화면에서 반영 결과를 확인할 수 있게 한다. */
     private final Map<String, Long> overriddenBids = new ConcurrentHashMap<>();
 
+    /** Stub 에서 바꾼 캠페인 일예산과 꺼 둔 키워드를 기억한다. */
+    private final Map<String, Long> overriddenBudgets = new ConcurrentHashMap<>();
+    private final java.util.Set<String> pausedKeywords = ConcurrentHashMap.newKeySet();
+
     /** Stub 에서 등록한 제외 키워드를 기억한다. */
     private final Map<String, List<RestrictedKeyword>> restricted = new ConcurrentHashMap<>();
 
@@ -41,7 +46,8 @@ public class StubSearchAdClient implements SearchAdClient {
 
     @Override
     public List<NccCampaign> listCampaigns() {
-        return List.of(new NccCampaign(CAMPAIGN_ID, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE", 50000L, false));
+        return List.of(new NccCampaign(CAMPAIGN_ID, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE",
+                overriddenBudgets.getOrDefault(scoped(CAMPAIGN_ID), 50000L), false));
     }
 
     @Override
@@ -60,7 +66,8 @@ public class StubSearchAdClient implements SearchAdClient {
         List<NccKeyword> keywords = new ArrayList<>();
         for (int i = 0; i < KEYWORDS.size(); i++) {
             keywords.add(new NccKeyword(
-                    keywordId(i), ADGROUP_ID, KEYWORDS.get(i), "ELIGIBLE",
+                    keywordId(i), ADGROUP_ID, KEYWORDS.get(i),
+                    pausedKeywords.contains(scoped(keywordId(i))) ? "PAUSED" : "ELIGIBLE",
                     overriddenBids.getOrDefault(scoped(keywordId(i)), 500L + (i * 90L)), false, false));
         }
         return keywords;
@@ -85,6 +92,39 @@ public class StubSearchAdClient implements SearchAdClient {
             result.put(keyword, Math.max(70, base * (6 - Math.min(position, 5))));
         }
         return result;
+    }
+
+    /**
+     * 입찰가를 올릴수록 클릭이 늘되 점점 덜 늘고, 클릭 단가는 입찰가의 75% 로 잡은 가짜 예측.
+     * 실제 경매처럼 입찰가를 올릴수록 추가 클릭의 단가가 비싸진다.
+     */
+    @Override
+    public List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        List<PerformanceEstimate> result = new ArrayList<>();
+        for (PerformanceEstimate.Query q : queries) {
+            int seed = Math.abs(q.keyword().hashCode());
+            double maxClicks = 60 + seed % 400;
+            double half = 300 + seed % 900;
+            long clicks = Math.round(maxClicks * q.bid() / (q.bid() + half));
+            long cpc = Math.max(70, Math.round(q.bid() * 0.75));
+            result.add(new PerformanceEstimate(q.keyword(), q.bid(), clicks * 30, clicks, clicks * cpc));
+        }
+        return result;
+    }
+
+    @Override
+    public long updateCampaignDailyBudget(String nccCampaignId, long dailyBudget) {
+        overriddenBudgets.put(scoped(nccCampaignId), dailyBudget);
+        return dailyBudget;
+    }
+
+    @Override
+    public void setKeywordPaused(String nccKeywordId, String nccAdgroupId, boolean paused) {
+        if (paused) {
+            pausedKeywords.add(scoped(nccKeywordId));
+        } else {
+            pausedKeywords.remove(scoped(nccKeywordId));
+        }
     }
 
     @Override

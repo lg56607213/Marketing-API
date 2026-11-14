@@ -219,6 +219,9 @@ export interface PlanRequest {
   monthlyBudget: number | null
   saleValue: number | null
   assumedCvrPct: number | null
+  siteMonthlyVisitors: number | null
+  siteMonthlyConversions: number | null
+  targetRoasPct: number | null
 }
 
 export interface PlanKeyword {
@@ -229,6 +232,15 @@ export interface PlanKeyword {
   expectedClicks: number
   expectedCost: number
   selected: boolean
+  expectedImpressions: number
+  expectedCpc: number
+}
+
+export interface PlanBasis {
+  item: string
+  value: string
+  source: string
+  grade: string
 }
 
 export interface PlanScenario {
@@ -257,9 +269,81 @@ export interface PlanProposal {
   steps: string[]
   warnings: string[]
   createdAt: string
+  cvrLowPct: number
+  cvrHighPct: number
+  maxCpc: number | null
+  basis: PlanBasis[]
 }
 
-export type BriefingPeriod = 'DAILY' | 'WEEKLY'
+export interface KeywordEfficiency {
+  nccKeywordId: string
+  keyword: string
+  impressions: number
+  clicks: number
+  cost: number
+  conversions: number
+  revenue: number
+  cpa: number
+  roasPct: number
+  cvrPct: number
+  actualCpc: number
+  maxCpc: number
+  currentBid: number
+  suggestedBid: number
+  verdict: string
+  reason: string
+}
+
+export interface EfficiencyAnalysis {
+  since: string
+  until: string
+  mode: string
+  targetLabel: string
+  accountCvrPct: number
+  keywords: KeywordEfficiency[]
+}
+
+export interface AutopilotSettingsRequest {
+  enabled: boolean
+  targetCpa: number
+  targetRoasPct: number
+  monthlyBudgetCap: number
+  manageBids: boolean
+  manageBudget: boolean
+  pauseWasteful: boolean
+}
+
+export interface AutopilotSettings extends AutopilotSettingsRequest {
+  effectiveTargetCpa: number
+  effectiveMonthlyBudgetCap: number
+  targetSource: string
+  dryRun: boolean
+  maxChangeRatePct: number
+  maxDailyApplies: number
+  minBid: number
+  maxBid: number
+}
+
+export interface AutopilotAction {
+  type: string
+  target: string
+  before: string
+  after: string
+  reason: string
+  status: string
+}
+
+export interface AutopilotRun {
+  id: number
+  preview: boolean
+  dryRun: boolean
+  summary: string
+  actions: AutopilotAction[]
+  notes: string[]
+  ranAt: string
+}
+
+export type BriefingPeriod = 'DAILY' | 'WEEKLY' | 'MONTHLY'
 export type BriefingVerdict = 'INCREASE' | 'HOLD' | 'DECREASE' | 'NEED_DATA'
 
 export interface BriefingMetric {
@@ -295,6 +379,10 @@ export interface Briefing {
   actions: { type: string; target: string; detail: string }[]
   narrative: string[]
   generatedBy: string
+  efficiencyBasis: string | null
+  efficiency: KeywordEfficiency[]
+  autopilotSummary: string | null
+  autopilotActions: AutopilotAction[]
   createdAt: string
 }
 
