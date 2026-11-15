@@ -1,5 +1,6 @@
 package com.marketingagent.domain.prompt;
 
+import com.marketingagent.common.security.CurrentUser;
 import com.marketingagent.common.exception.ResourceNotFoundException;
 import com.marketingagent.domain.brand.BrandService;
 import com.marketingagent.domain.prompt.dto.PromptRequest;
@@ -31,9 +32,10 @@ public class PromptService {
     @Transactional(readOnly = true)
     public List<PromptResponse> findAll(Long brandId) {
         if (brandId != null) {
+            brandService.getOrThrow(brandId);
             return promptRepository.findByBrandId(brandId).stream().map(PromptResponse::from).toList();
         }
-        return promptRepository.findAll().stream().map(PromptResponse::from).toList();
+        return promptRepository.findByBrand_CompanyId(CurrentUser.companyId()).stream().map(PromptResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +57,7 @@ public class PromptService {
 
     private PromptTemplate getOrThrow(Long id) {
         return promptRepository.findById(id)
+                .filter(e -> e.getBrand() != null && CurrentUser.companyId().equals(e.getBrand().getCompanyId()))
                 .orElseThrow(() -> new ResourceNotFoundException("PromptTemplate not found: " + id));
     }
 }

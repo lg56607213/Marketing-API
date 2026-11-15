@@ -14,6 +14,7 @@ import { SeoPage } from '@/pages/analytics/SeoPage'
 import { SearchQueryPage } from '@/pages/analytics/SearchQueryPage'
 import { KeywordToolPage } from '@/pages/analytics/KeywordToolPage'
 import { CompetitorAnalysisPage } from '@/pages/analytics/CompetitorAnalysisPage'
+import { AdAccountsPage } from '@/pages/analytics/AdAccountsPage'
 import { AIHistoryPage } from '@/pages/AIHistoryPage'
 import { ImageLibraryPage } from '@/pages/ImageLibraryPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/analytics/search-queries" element={<SearchQueryPage />} />
           <Route path="/analytics/keywords" element={<KeywordToolPage />} />
           <Route path="/analytics/competitors" element={<CompetitorAnalysisPage />} />
+          <Route path="/analytics/accounts" element={<AdAccountsPage />} />
           <Route path="/history" element={<AIHistoryPage />} />
           <Route path="/images" element={<ImageLibraryPage />} />
           <Route path="/settings" element={<SettingsPage />} />

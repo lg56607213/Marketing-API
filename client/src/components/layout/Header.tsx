@@ -10,6 +10,7 @@ const pageTitles: Record<string, string> = {
   '/analytics/market': '마켓 인텔리전스',
   '/analytics/channels': '채널 애널리틱스',
   '/analytics/competitors': '경쟁사 분석',
+  '/analytics/accounts': '광고 계정 관리',
   '/analytics': '마케팅 인텔리전스 — 개요',
   '/history': 'AI 히스토리',
   '/images': '이미지 라이브러리',

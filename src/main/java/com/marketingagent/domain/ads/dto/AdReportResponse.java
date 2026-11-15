@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 public record AdReportResponse(
         Long id,
+        String nccCampaignId,
         String title,
         String body,
         LocalDate since,
@@ -14,7 +15,7 @@ public record AdReportResponse(
         LocalDateTime createdAt
 ) {
     public static AdReportResponse from(AdReport r) {
-        return new AdReportResponse(r.getId(), r.getTitle(), r.getBody(),
+        return new AdReportResponse(r.getId(), r.getNccCampaignId(), r.getTitle(), r.getBody(),
                 r.getSince(), r.getUntil(), r.getGeneratedBy(), r.getCreatedAt());
     }
 }

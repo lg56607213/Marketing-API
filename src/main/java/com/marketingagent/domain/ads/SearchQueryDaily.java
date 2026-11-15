@@ -17,9 +17,12 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @Table(name = "search_query_daily",
-        uniqueConstraints = @UniqueConstraint(name = "uk_search_query_daily",
-                columnNames = {"stat_date", "ncc_adgroup_id", "search_query", "device"}))
+        uniqueConstraints = @UniqueConstraint(name = "uk_search_query_daily_account",
+                columnNames = {"ad_account_id", "stat_date", "ncc_adgroup_id", "search_query", "device"}))
 public class SearchQueryDaily extends BaseEntity {
+
+    @Column(name = "ad_account_id")
+    private Long adAccountId;
 
     @Column(name = "stat_date", nullable = false)
     private LocalDate statDate;
@@ -43,8 +46,9 @@ public class SearchQueryDaily extends BaseEntity {
 
     private long salesAmt;
 
-    public SearchQueryDaily(LocalDate statDate, String nccCampaignId, String nccAdgroupId,
+    public SearchQueryDaily(Long adAccountId, LocalDate statDate, String nccCampaignId, String nccAdgroupId,
             String searchQuery, String device, long impCnt, long clkCnt, long salesAmt) {
+        this.adAccountId = adAccountId;
         this.statDate = statDate;
         this.nccCampaignId = nccCampaignId;
         this.nccAdgroupId = nccAdgroupId;

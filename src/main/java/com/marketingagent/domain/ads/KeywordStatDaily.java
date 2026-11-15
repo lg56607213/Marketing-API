@@ -16,9 +16,12 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @Table(name = "keyword_stat_daily",
-        uniqueConstraints = @UniqueConstraint(name = "uk_keyword_stat_daily",
-                columnNames = {"ncc_keyword_id", "stat_date"}))
+        uniqueConstraints = @UniqueConstraint(name = "uk_keyword_stat_daily_account",
+                columnNames = {"ad_account_id", "ncc_keyword_id", "stat_date"}))
 public class KeywordStatDaily extends BaseEntity {
+
+    @Column(name = "ad_account_id")
+    private Long adAccountId;
 
     @Column(name = "ncc_keyword_id", nullable = false, length = 100)
     private String nccKeywordId;
@@ -47,8 +50,9 @@ public class KeywordStatDaily extends BaseEntity {
     /** 전환수 */
     private long ccnt;
 
-    public KeywordStatDaily(String nccKeywordId, LocalDate statDate, long impCnt, long clkCnt,
+    public KeywordStatDaily(Long adAccountId, String nccKeywordId, LocalDate statDate, long impCnt, long clkCnt,
             long salesAmt, double ctr, double cpc, double avgRnk, long ccnt) {
+        this.adAccountId = adAccountId;
         this.nccKeywordId = nccKeywordId;
         this.statDate = statDate;
         this.impCnt = impCnt;

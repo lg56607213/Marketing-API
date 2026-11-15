@@ -26,14 +26,19 @@ public class AdReportController {
 
     @Operation(summary = "리포트 생성", description = "기간 성과를 분석해 리포트를 만든다. AI 미설정 시 규칙 기반으로 생성한다.")
     @PostMapping
-    public ResponseEntity<ApiResponse<AdReportResponse>> generate(@RequestParam(defaultValue = "7") int days) {
-        return ResponseEntity.ok(ApiResponse.ok(AdReportResponse.from(adReportService.generate(days))));
+    public ResponseEntity<ApiResponse<AdReportResponse>> generate(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId,
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(ApiResponse.ok(AdReportResponse.from(adReportService.generate(accountId, campaignId, days))));
     }
 
     @Operation(summary = "최근 리포트 목록")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<AdReportResponse>>> list() {
-        return ResponseEntity.ok(ApiResponse.ok(adReportService.findRecent().stream()
+    public ResponseEntity<ApiResponse<List<AdReportResponse>>> list(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId) {
+        return ResponseEntity.ok(ApiResponse.ok(adReportService.findRecent(accountId, campaignId).stream()
                 .map(AdReportResponse::from)
                 .toList()));
     }

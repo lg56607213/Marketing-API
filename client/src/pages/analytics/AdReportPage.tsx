@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { adReportApi } from '@/services/api'
 import type { AdReport, AdHealth } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 import { cn } from '@/lib/utils'
 
 const RANGES = [
@@ -15,6 +17,7 @@ const RANGES = [
 ]
 
 export function AdReportPage() {
+  const { accountId, campaignId } = useAdScopeStore()
   const [reports, setReports] = useState<AdReport[]>([])
   const [current, setCurrent] = useState<AdReport | null>(null)
   const [health, setHealth] = useState<AdHealth | null>(null)
@@ -23,16 +26,17 @@ export function AdReportPage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!accountId) return
     setError(null)
     try {
       const [list, h] = await Promise.all([adReportApi.list(), adReportApi.health()])
       setReports(list)
       setHealth(h)
-      if (list.length > 0) setCurrent(list[0])
+      setCurrent(list.length > 0 ? list[0] : null)
     } catch {
       setError('리포트 목록을 불러오지 못했습니다.')
     }
-  }, [])
+  }, [accountId, campaignId])
 
   useEffect(() => {
     void load()
@@ -54,6 +58,7 @@ export function AdReportPage() {
 
   return (
     <div className="space-y-6">
+      <AdScopeBar />
       {health && (
         <div
           className={cn(

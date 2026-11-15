@@ -32,17 +32,20 @@ public class SearchQueryController {
             description = "네이버에서 일자별 검색어 리포트를 내려받아 적재한다. 하루씩 생성되므로 시간이 걸린다.")
     @PostMapping("/sync")
     public ResponseEntity<ApiResponse<SearchQuerySyncResult>> sync(
+            @RequestParam Long accountId,
             @RequestParam(defaultValue = "" + DEFAULT_DAYS) int days) {
-        return ResponseEntity.ok(ApiResponse.ok(searchQueryService.sync(days)));
+        return ResponseEntity.ok(ApiResponse.ok(searchQueryService.sync(accountId, days)));
     }
 
     @Operation(summary = "검색어별 성과 조회")
     @GetMapping
     public ResponseEntity<ApiResponse<List<SearchQueryPerformance>>> performance(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate since,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate until) {
         LocalDate end = until != null ? until : LocalDate.now();
         LocalDate start = since != null ? since : end.minusDays(DEFAULT_DAYS - 1L);
-        return ResponseEntity.ok(ApiResponse.ok(searchQueryService.performance(start, end)));
+        return ResponseEntity.ok(ApiResponse.ok(searchQueryService.performance(accountId, campaignId, start, end)));
     }
 }

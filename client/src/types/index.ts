@@ -9,6 +9,8 @@ export interface AuthResponse {
   token: string
   email: string
   role: 'USER' | 'ADMIN'
+  companyId: number | null
+  companyName: string | null
 }
 
 export interface UserSummary {
@@ -127,6 +129,8 @@ export interface KeywordPerformance {
   nccKeywordId: string
   keyword: string
   adgroupName: string
+  nccCampaignId: string | null
+  campaignName: string | null
   status: string | null
   bidAmt: number | null
   impCnt: number
@@ -151,6 +155,7 @@ export interface AdSyncResult {
 
 export interface BidRecommendation {
   id: number
+  nccCampaignId: string | null
   nccKeywordId: string
   keyword: string
   currentBid: number
@@ -184,6 +189,7 @@ export interface BidApplyResult {
 
 export interface AdReport {
   id: number
+  nccCampaignId: string | null
   title: string
   body: string
   since: string
@@ -256,4 +262,35 @@ export interface SeoHealth {
   configured: boolean
   reachable: boolean
   message: string
+}
+
+export interface AdAccount {
+  id: number
+  name: string
+  provider: 'naver' | 'stub'
+  customerId: string | null
+  apiKeyPreview: string | null
+  credentialsSet: boolean
+  targetCpa: number | null
+  createdAt: string
+}
+
+export interface AdAccountRequest {
+  name: string
+  provider?: 'naver' | 'stub'
+  customerId?: string
+  apiKey?: string
+  secretKey?: string
+  targetCpa?: number
+}
+
+export interface AdCampaign {
+  id: number
+  adAccountId: number
+  nccCampaignId: string
+  name: string
+  campaignTp: string | null
+  status: string | null
+  dailyBudget: number | null
+  targetCpa: number | null
 }

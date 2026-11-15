@@ -4,6 +4,8 @@ import com.marketingagent.common.exception.BadRequestException;
 import com.marketingagent.domain.ads.dto.SearchQueryAggregate;
 import com.marketingagent.domain.ads.dto.SearchQueryPerformance;
 import com.marketingagent.domain.ads.dto.SearchQuerySyncResult;
+import com.marketingagent.domain.ads.account.AdAccount;
+import com.marketingagent.domain.ads.account.AdAccountService;
 import com.marketingagent.integration.naver.SearchAdClient;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import java.time.LocalDate;
@@ -28,12 +30,14 @@ public class SearchQueryService {
 
     private static final int MAX_SYNC_DAYS = 14;
 
-    private final SearchAdClient searchAdClient;
+    private final AdAccountService accountService;
     private final SearchQueryDailyRepository repository;
     private final AdKeywordRepository keywordRepository;
 
     @Transactional
-    public SearchQuerySyncResult sync(int days) {
+    public SearchQuerySyncResult sync(Long accountId, int days) {
+        AdAccount account = accountService.require(accountId);
+        SearchAdClient searchAdClient = accountService.client(account);
         int span = Math.min(Math.max(days, 1), MAX_SYNC_DAYS);
         // 당일 리포트는 아직 집계되지 않아 조회가 거부되는 경우가 있어 전일까지만 받는다.
         LocalDate until = LocalDate.now().minusDays(1);
@@ -44,7 +48,7 @@ public class SearchQueryService {
         for (LocalDate date = since; !date.isAfter(until); date = date.plusDays(1)) {
             try {
                 List<SearchQueryRow> rows = searchAdClient.searchQueryReport(date);
-                rows.forEach(this::upsert);
+                rows.forEach(row -> upsert(account.getId(), row));
                 rowCount += rows.size();
             } catch (Exception e) {
                 // 광고가 나가지 않은 날은 지표가 없어 리포트 생성이 거부된다. 그 날만 건너뛴다.
@@ -59,13 +63,18 @@ public class SearchQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<SearchQueryPerformance> performance(LocalDate since, LocalDate until) {
-        List<SearchQueryAggregate> rows = repository.aggregate(since, until);
+    public List<SearchQueryPerformance> performance(Long accountId, String campaignId,
+            LocalDate since, LocalDate until) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        List<SearchQueryAggregate> rows = campaign == null
+                ? repository.aggregate(account.getId(), since, until)
+                : repository.aggregateForCampaign(account.getId(), campaign, since, until);
         if (rows.isEmpty()) {
             throw new BadRequestException("적재된 검색어 데이터가 없습니다. 먼저 검색어 리포트를 가져오세요.");
         }
 
-        Set<String> registered = new HashSet<>(keywordRepository.findAll().stream()
+        Set<String> registered = new HashSet<>(keywordRepository.findByAdAccountId(account.getId()).stream()
                 .map(AdKeyword::getKeyword)
                 .toList());
 
@@ -83,12 +92,12 @@ public class SearchQueryService {
         }).toList();
     }
 
-    private void upsert(SearchQueryRow row) {
-        repository.findByStatDateAndNccAdgroupIdAndSearchQueryAndDevice(
-                        row.statDate(), row.nccAdgroupId(), row.searchQuery(), row.device())
+    private void upsert(Long accountId, SearchQueryRow row) {
+        repository.findByAdAccountIdAndStatDateAndNccAdgroupIdAndSearchQueryAndDevice(
+                        accountId, row.statDate(), row.nccAdgroupId(), row.searchQuery(), row.device())
                 .ifPresentOrElse(
                         existing -> existing.update(row.impCnt(), row.clkCnt(), row.salesAmt()),
-                        () -> repository.save(new SearchQueryDaily(row.statDate(), row.nccCampaignId(),
+                        () -> repository.save(new SearchQueryDaily(accountId, row.statDate(), row.nccCampaignId(),
                                 row.nccAdgroupId(), row.searchQuery(), row.device(),
                                 row.impCnt(), row.clkCnt(), row.salesAmt())));
     }

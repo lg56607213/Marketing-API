@@ -1,5 +1,7 @@
 package com.marketingagent.domain.ads;
 
+import com.marketingagent.domain.ads.account.AdAccount;
+import com.marketingagent.domain.ads.account.AdAccountService;
 import com.marketingagent.domain.ads.dto.AdSummary;
 import com.marketingagent.domain.ads.dto.DailyPoint;
 import com.marketingagent.domain.ads.dto.KeywordAggregate;
@@ -7,9 +9,6 @@ import com.marketingagent.domain.ads.dto.KeywordPerformance;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,38 +16,77 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 적재된 성과 데이터를 조회용으로 집계한다.
  * CTR/CPC/CVR 은 일자별 평균이 아니라 기간 합계에서 다시 계산한다.
+ * 계정은 필수이고, 캠페인을 주면 그 캠페인에 속한 키워드만 본다.
  */
 @Service
 @RequiredArgsConstructor
 public class AdAnalyticsService {
 
+    private final AdAccountService accountService;
     private final KeywordStatDailyRepository statRepository;
     private final AdKeywordRepository keywordRepository;
     private final AdGroupRepository adGroupRepository;
+    private final AdCampaignRepository campaignRepository;
 
     @Transactional(readOnly = true)
-    public List<KeywordPerformance> keywordPerformance(LocalDate since, LocalDate until) {
-        Map<String, AdKeyword> keywords = keywordRepository.findAll().stream()
-                .collect(Collectors.toMap(AdKeyword::getNccKeywordId, Function.identity(), (a, b) -> a));
-        Map<String, String> adgroupNames = adGroupRepository.findAll().stream()
-                .collect(Collectors.toMap(AdGroup::getNccAdgroupId, AdGroup::getName, (a, b) -> a));
+    public List<AdCampaign> campaigns(Long accountId) {
+        AdAccount account = accountService.require(accountId);
+        return campaignRepository.findByAdAccountIdOrderByNameAsc(account.getId());
+    }
 
-        return statRepository.aggregateByKeyword(since, until).stream()
-                .map(row -> toPerformance(row, keywords.get(row.nccKeywordId()), adgroupNames))
+    @Transactional(readOnly = true)
+    public List<AdGroup> adgroups(Long accountId, String campaignId) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        return campaign == null
+                ? adGroupRepository.findByAdAccountIdOrderByNameAsc(account.getId())
+                : adGroupRepository.findByAdAccountIdAndNccCampaignIdOrderByNameAsc(account.getId(), campaign);
+    }
+
+    /** 캠페인별 목표 CPA 를 정한다. 0 또는 null 이면 지정을 해제해 계정 기본값을 따르게 한다. */
+    @Transactional
+    public AdCampaign changeTargetCpa(Long accountId, String campaignId, Long targetCpa) {
+        AdAccount account = accountService.require(accountId);
+        AdCampaign campaign = campaignRepository
+                .findByAdAccountIdAndNccCampaignId(account.getId(), campaignId)
+                .orElseThrow(() -> new com.marketingagent.common.exception.ResourceNotFoundException(
+                        "캠페인을 찾을 수 없습니다: " + campaignId));
+        campaign.changeTargetCpa(targetCpa);
+        return campaign;
+    }
+
+    @Transactional(readOnly = true)
+    public List<KeywordPerformance> keywordPerformance(Long accountId, String campaignId,
+            LocalDate since, LocalDate until) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        AdScope scope = scope(account.getId());
+
+        return statRepository.aggregateByKeyword(account.getId(), since, until).stream()
+                .filter(row -> scope.inCampaign(row.nccKeywordId(), campaign))
+                .map(row -> toPerformance(row, scope))
                 .sorted(Comparator.comparingLong(KeywordPerformance::salesAmt).reversed())
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public AdSummary summary(LocalDate since, LocalDate until) {
-        List<KeywordAggregate> rows = statRepository.aggregateByKeyword(since, until);
+    public AdSummary summary(Long accountId, String campaignId, LocalDate since, LocalDate until) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        AdScope scope = scope(account.getId());
+
+        List<KeywordAggregate> rows = statRepository.aggregateByKeyword(account.getId(), since, until).stream()
+                .filter(row -> scope.inCampaign(row.nccKeywordId(), campaign))
+                .toList();
 
         long impCnt = rows.stream().mapToLong(r -> nz(r.impCnt())).sum();
         long clkCnt = rows.stream().mapToLong(r -> nz(r.clkCnt())).sum();
         long salesAmt = rows.stream().mapToLong(r -> nz(r.salesAmt())).sum();
         long ccnt = rows.stream().mapToLong(r -> nz(r.ccnt())).sum();
 
-        List<DailyPoint> daily = statRepository.aggregateByDate(since, until);
+        List<DailyPoint> daily = campaign == null
+                ? statRepository.aggregateByDate(account.getId(), since, until)
+                : statRepository.aggregateByDateForCampaign(account.getId(), campaign, since, until);
 
         return new AdSummary(since, until, impCnt, clkCnt,
                 ratio(clkCnt * 100.0, impCnt), ratio(salesAmt, clkCnt),
@@ -56,8 +94,15 @@ public class AdAnalyticsService {
                 rows.size(), daily);
     }
 
-    private KeywordPerformance toPerformance(KeywordAggregate row, AdKeyword keyword,
-            Map<String, String> adgroupNames) {
+    private AdScope scope(Long accountId) {
+        return AdScope.load(accountId, campaignRepository, adGroupRepository, keywordRepository);
+    }
+
+    private KeywordPerformance toPerformance(KeywordAggregate row, AdScope scope) {
+        AdKeyword keyword = scope.keyword(row.nccKeywordId());
+        AdGroup adgroup = scope.adgroupOf(keyword);
+        String campaignId = adgroup != null ? adgroup.getNccCampaignId() : null;
+
         long impCnt = nz(row.impCnt());
         long clkCnt = nz(row.clkCnt());
         long salesAmt = nz(row.salesAmt());
@@ -66,7 +111,9 @@ public class AdAnalyticsService {
         return new KeywordPerformance(
                 row.nccKeywordId(),
                 keyword != null ? keyword.getKeyword() : row.nccKeywordId(),
-                keyword != null ? adgroupNames.getOrDefault(keyword.getNccAdgroupId(), "-") : "-",
+                adgroup != null ? adgroup.getName() : "-",
+                campaignId,
+                campaignId != null ? scope.campaignName(campaignId) : null,
                 keyword != null ? keyword.getStatus() : null,
                 keyword != null ? keyword.getBidAmt() : null,
                 impCnt,

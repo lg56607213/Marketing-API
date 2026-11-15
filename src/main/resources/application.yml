@@ -34,6 +34,10 @@ jwt:
   secret: ${JWT_SECRET:ai-marketing-agent-secret-key-must-be-at-least-32-characters-long}
   expiration: ${JWT_EXPIRATION:86400000}
 
+app:
+  # DB에 저장하는 광고 API 비밀키를 암호화하는 키. 운영에서는 반드시 바꾸고, 바꾼 뒤에는 유지한다.
+  encryption-key: ${APP_ENCRYPTION_KEY:${jwt.secret}}
+
 ai:
   provider: ${AI_PROVIDER:stub}
   openai:

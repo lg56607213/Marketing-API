@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TemplateRepository extends JpaRepository<Template, Long> {
     List<Template> findByBrandId(Long brandId);
+    List<Template> findByBrand_CompanyId(Long companyId);
     List<Template> findByBrandIdAndContentType(Long brandId, ContentType contentType);
     Optional<Template> findFirstByBrandIdAndContentType(Long brandId, ContentType contentType);
 }

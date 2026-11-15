@@ -21,6 +21,13 @@ import lombok.NoArgsConstructor;
 @Table(name = "bid_recommendations")
 public class BidRecommendation extends BaseEntity {
 
+    @Column(name = "ad_account_id")
+    private Long adAccountId;
+
+    /** 추천 시점에 키워드가 속해 있던 캠페인. 캠페인별 조회와 목표 CPA 추적에 쓴다. */
+    @Column(name = "ncc_campaign_id", length = 100)
+    private String nccCampaignId;
+
     @Column(nullable = false, length = 100)
     private String nccKeywordId;
 
@@ -71,16 +78,12 @@ public class BidRecommendation extends BaseEntity {
     @Column(length = 500)
     private String resultMessage;
 
-    public BidRecommendation(String nccKeywordId, String keyword, long currentBid, long recommendedBid,
-            String reason, LocalDate since, LocalDate until, long impCnt, long clkCnt, long salesAmt,
-            long ccnt, double ctr, double avgRnk) {
-        this(nccKeywordId, keyword, currentBid, recommendedBid, reason, since, until,
-                impCnt, clkCnt, salesAmt, ccnt, ctr, avgRnk, BidStrategy.PERFORMANCE);
-    }
-
-    public BidRecommendation(String nccKeywordId, String keyword, long currentBid, long recommendedBid,
+    public BidRecommendation(Long adAccountId, String nccCampaignId, String nccKeywordId, String keyword,
+            long currentBid, long recommendedBid,
             String reason, LocalDate since, LocalDate until, long impCnt, long clkCnt, long salesAmt,
             long ccnt, double ctr, double avgRnk, BidStrategy strategy) {
+        this.adAccountId = adAccountId;
+        this.nccCampaignId = nccCampaignId;
         this.nccKeywordId = nccKeywordId;
         this.keyword = keyword;
         this.currentBid = currentBid;

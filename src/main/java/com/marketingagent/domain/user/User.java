@@ -27,14 +27,23 @@ public class User extends BaseEntity implements AuthenticatedUser, UserDetails {
     @Column(nullable = false)
     private String password;
 
+    /** ADMIN 은 자기 업체의 관리자다. 다른 업체에는 권한이 없다. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role = UserRole.USER;
 
-    public User(String email, String password, UserRole role) {
+    @Column(name = "company_id")
+    private Long companyId;
+
+    public User(String email, String password, UserRole role, Long companyId) {
         this.email = email;
         this.password = password;
         this.role = role;
+        this.companyId = companyId;
+    }
+
+    public void assignCompany(Long companyId) {
+        this.companyId = companyId;
     }
 
     @Override

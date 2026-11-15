@@ -1,6 +1,8 @@
 package com.marketingagent.domain.ads;
 
 import com.marketingagent.ai.AiProvider;
+import com.marketingagent.domain.ads.account.AdAccount;
+import com.marketingagent.domain.ads.account.AdAccountService;
 import com.marketingagent.ai.AiRequest;
 import com.marketingagent.ai.AiResponse;
 import com.marketingagent.common.exception.BadRequestException;
@@ -31,6 +33,9 @@ public class AdReportService {
 
     private static final int TOP_N = 5;
 
+    private final AdAccountService accountService;
+    private final AdCampaignRepository campaignRepository;
+    private final AdGroupRepository adGroupRepository;
     private final KeywordStatDailyRepository statRepository;
     private final AdKeywordRepository keywordRepository;
     private final AdReportRepository reportRepository;
@@ -43,41 +48,56 @@ public class AdReportService {
     private String aiModel;
 
     @Transactional
-    public AdReport generate(int days) {
+    public AdReport generate(Long accountId, String campaignId, int days) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        AdScope scope = AdScope.load(account.getId(), campaignRepository, adGroupRepository, keywordRepository);
         LocalDate until = LocalDate.now().minusDays(1);
         LocalDate since = until.minusDays(Math.max(days, 1) - 1L);
         LocalDate prevUntil = since.minusDays(1);
         LocalDate prevSince = prevUntil.minusDays(Math.max(days, 1) - 1L);
 
-        Period current = period(since, until);
+        Period current = period(account.getId(), campaign, scope, since, until);
         if (current.rows().isEmpty()) {
             throw new BadRequestException("분석할 성과 데이터가 없습니다. 먼저 검색광고 동기화를 실행하세요.");
         }
-        Period previous = period(prevSince, prevUntil);
+        Period previous = period(account.getId(), campaign, scope, prevSince, prevUntil);
 
         String facts = renderFacts(current, previous);
         boolean useAi = !"stub".equalsIgnoreCase(aiProviderName);
         String insight = useAi ? aiInsight(facts) : ruleInsight(current, previous);
         String generatedBy = useAi ? aiProviderName + ":" + aiModel : "rule-based";
 
-        String title = String.format("검색광고 성과 리포트 (%s ~ %s)", since, until);
+        String target = campaign == null ? account.getName() : account.getName() + " · " + scope.campaignName(campaign);
+        String title = String.format("[%s] 검색광고 성과 리포트 (%s ~ %s)", target, since, until);
         String body = facts + "\n\n" + insight
                 + "\n\n---\n생성: " + generatedBy;
 
-        AdReport report = reportRepository.save(new AdReport(title, body, since, until, generatedBy));
+        AdReport report = reportRepository.save(new AdReport(account.getId(), campaign, title, body, since, until, generatedBy));
         log.info("광고 리포트 생성: {} ({}건 키워드, {})", title, current.rows().size(), generatedBy);
         return report;
     }
 
     @Transactional(readOnly = true)
-    public List<AdReport> findRecent() {
-        return reportRepository.findTop20ByOrderByIdDesc();
+    public List<AdReport> findRecent(Long accountId, String campaignId) {
+        AdAccount account = accountService.require(accountId);
+        String campaign = accountService.normalizeCampaign(account, campaignId);
+        return reportRepository.findTop20ByAdAccountIdOrderByIdDesc(account.getId()).stream()
+                .filter(r -> campaign == null || campaign.equals(r.getNccCampaignId()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public AdReport findById(Long id) {
-        return reportRepository.findById(id)
+        AdReport report = reportRepository.findById(id)
+                .filter(r -> r.getAdAccountId() != null)
                 .orElseThrow(() -> new BadRequestException("리포트를 찾을 수 없습니다: " + id));
+        try {
+            accountService.require(report.getAdAccountId());
+        } catch (RuntimeException e) {
+            throw new BadRequestException("리포트를 찾을 수 없습니다: " + id);
+        }
+        return report;
     }
 
     // --- 데이터 섹션 (항상 계산) ---
@@ -269,9 +289,11 @@ public class AdReportService {
 
     // --- 집계 ---
 
-    private Period period(LocalDate since, LocalDate until) {
-        List<KeywordAggregate> rows = statRepository.aggregateByKeyword(since, until);
-        Map<String, String> names = keywordRepository.findAll().stream()
+    private Period period(Long accountId, String campaign, AdScope scope, LocalDate since, LocalDate until) {
+        List<KeywordAggregate> rows = statRepository.aggregateByKeyword(accountId, since, until).stream()
+                .filter(r -> scope.inCampaign(r.nccKeywordId(), campaign))
+                .toList();
+        Map<String, String> names = keywordRepository.findByAdAccountId(accountId).stream()
                 .collect(Collectors.toMap(AdKeyword::getNccKeywordId, AdKeyword::getKeyword,
                         (a, b) -> a, LinkedHashMap::new));
 

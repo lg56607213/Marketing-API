@@ -36,8 +36,17 @@ public class Brand extends BaseEntity {
 
     private Long ownerId;
 
+    /** 이 브랜드를 가진 업체. 같은 업체 사용자끼리는 브랜드를 함께 쓴다. */
+    @Column(name = "company_id")
+    private Long companyId;
+
+    public void assignCompany(Long companyId) {
+        this.companyId = companyId;
+    }
+
     public Brand(String name, String description, String toneAndManner, String cta,
-            String forbiddenWords, String allowedWords, String seoRules, Long ownerId) {
+            String forbiddenWords, String allowedWords, String seoRules, Long ownerId, Long companyId) {
+        this.companyId = companyId;
         this.name = name;
         this.description = description;
         this.toneAndManner = toneAndManner;

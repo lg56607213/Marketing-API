@@ -22,10 +22,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
@@ -34,8 +32,6 @@ import org.springframework.web.client.RestClientResponseException;
  * 모든 요청에 X-Timestamp / X-API-KEY / X-Customer / X-Signature 헤더를 붙인다.
  */
 @Slf4j
-@Component
-@ConditionalOnProperty(name = "naver.searchad.provider", havingValue = "naver")
 public class NaverSearchAdClient implements SearchAdClient {
 
     /**
@@ -49,16 +45,16 @@ public class NaverSearchAdClient implements SearchAdClient {
     private static final List<String> STAT_FIELDS =
             List.of("impCnt", "clkCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt");
 
-    private final NaverSearchAdProperties properties;
+    private final NaverCredentials properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
-    public NaverSearchAdClient(NaverSearchAdProperties properties, ObjectMapper objectMapper) {
+    public NaverSearchAdClient(NaverCredentials properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClient = RestClient.builder().baseUrl(properties.baseUrl()).build();
         if (isBlank(properties.customerId()) || isBlank(properties.apiKey()) || isBlank(properties.secretKey())) {
-            log.warn("네이버 검색광고 자격증명이 비어 있습니다. NAVER_CUSTOMER_ID / NAVER_API_KEY / NAVER_SECRET_KEY 를 설정하세요.");
+            throw new BadRequestException("네이버 검색광고 자격증명이 비어 있습니다. 광고 계정 설정에서 고객 ID · 액세스 라이선스 · 비밀키를 입력하세요.");
         }
     }
 

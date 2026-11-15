@@ -19,20 +19,20 @@ public class BrandService {
     @Transactional
     public BrandResponse create(BrandRequest request) {
         Long userId = CurrentUser.id();
-        if (brandRepository.existsByNameAndOwnerId(request.name(), userId)) {
+        if (brandRepository.existsByNameAndCompanyId(request.name(), CurrentUser.companyId())) {
             throw new DuplicateResourceException("Brand name already exists: " + request.name());
         }
         Brand brand = new Brand(
                 request.name(), request.description(), request.toneAndManner(),
                 request.cta(), request.forbiddenWords(), request.allowedWords(),
-                request.seoRules(), userId
+                request.seoRules(), userId, CurrentUser.companyId()
         );
         return BrandResponse.from(brandRepository.save(brand));
     }
 
     @Transactional(readOnly = true)
     public List<BrandResponse> findAll() {
-        return brandRepository.findAll().stream().map(BrandResponse::from).toList();
+        return brandRepository.findByCompanyIdOrderByIdAsc(CurrentUser.companyId()).stream().map(BrandResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +55,7 @@ public class BrandService {
 
     public Brand getOrThrow(Long id) {
         return brandRepository.findById(id)
+                .filter(b -> CurrentUser.companyId().equals(b.getCompanyId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Brand not found: " + id));
     }
 }

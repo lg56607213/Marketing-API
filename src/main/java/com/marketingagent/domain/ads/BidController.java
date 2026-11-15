@@ -32,8 +32,10 @@ public class BidController {
 
     @Operation(summary = "입찰가 추천 생성", description = "최근 성과를 분석해 추천을 만든다. 네이버에는 아무것도 반영하지 않는다.")
     @PostMapping("/recommend")
-    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> recommend() {
-        List<BidRecommendationResponse> result = bidRecommendationService.generate().stream()
+    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> recommend(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId) {
+        List<BidRecommendationResponse> result = bidRecommendationService.generate(accountId, campaignId).stream()
                 .map(BidRecommendationResponse::from)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(result));
@@ -43,10 +45,12 @@ public class BidController {
             description = "네이버 추정 입찰가로 목표 평균노출순위를 맞춘다. 네이버에는 아무것도 반영하지 않는다.")
     @PostMapping("/target-rank")
     public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> targetRank(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId,
             @RequestParam(defaultValue = "3") int position,
             @RequestParam(defaultValue = "MOBILE") String device) {
         List<BidRecommendationResponse> result =
-                bidRecommendationService.generateForTargetRank(position, device).stream()
+                bidRecommendationService.generateForTargetRank(accountId, campaignId, position, device).stream()
                         .map(BidRecommendationResponse::from)
                         .toList();
         return ResponseEntity.ok(ApiResponse.ok(result));
@@ -54,16 +58,20 @@ public class BidController {
 
     @Operation(summary = "승인 대기 추천 목록")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> pending() {
-        return ResponseEntity.ok(ApiResponse.ok(bidRecommendationService.findPending().stream()
+    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> pending(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId) {
+        return ResponseEntity.ok(ApiResponse.ok(bidRecommendationService.findPending(accountId, campaignId).stream()
                 .map(BidRecommendationResponse::from)
                 .toList()));
     }
 
     @Operation(summary = "처리 이력 조회", description = "반영·거절·실패 건의 감사 기록")
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> history() {
-        return ResponseEntity.ok(ApiResponse.ok(bidRecommendationService.findHistory().stream()
+    public ResponseEntity<ApiResponse<List<BidRecommendationResponse>>> history(
+            @RequestParam Long accountId,
+            @RequestParam(required = false) String campaignId) {
+        return ResponseEntity.ok(ApiResponse.ok(bidRecommendationService.findHistory(accountId, campaignId).stream()
                 .map(BidRecommendationResponse::from)
                 .toList()));
     }

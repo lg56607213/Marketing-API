@@ -16,6 +16,13 @@ import lombok.NoArgsConstructor;
 @Table(name = "ad_reports")
 public class AdReport extends BaseEntity {
 
+    @Column(name = "ad_account_id")
+    private Long adAccountId;
+
+    /** null means whole account */
+    @Column(name = "ncc_campaign_id", length = 100)
+    private String nccCampaignId;
+
     @Column(nullable = false)
     private String title;
 
@@ -33,7 +40,9 @@ public class AdReport extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String generatedBy;
 
-    public AdReport(String title, String body, LocalDate since, LocalDate until, String generatedBy) {
+    public AdReport(Long adAccountId, String nccCampaignId, String title, String body, LocalDate since, LocalDate until, String generatedBy) {
+        this.adAccountId = adAccountId;
+        this.nccCampaignId = nccCampaignId;
         this.title = title;
         this.body = body;
         this.since = since;
