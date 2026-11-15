@@ -8,7 +8,18 @@ import { authApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { toApiEmail } from '@/types'
 
+const LOGIN_ERROR = '아이디 또는 비밀번호가 올바르지 않습니다.'
+
+const signupError = (err: unknown) => {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  if (status === 409) return '이미 사용 중인 아이디입니다.'
+  if (status === 400) return '입력값을 확인해 주세요. 비밀번호는 8자 이상이어야 합니다.'
+  return '회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+}
+
 export function LoginPage() {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [companyName, setCompanyName] = useState('')
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -20,14 +31,20 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!loginId || !password) { setError('아이디와 비밀번호를 모두 입력해 주세요.'); return }
+    if (mode === 'signup') {
+      if (!companyName.trim()) { setError('업체명을 입력해 주세요.'); return }
+      if (password.length < 8) { setError('비밀번호는 8자 이상이어야 합니다.'); return }
+    }
     setError('')
     setLoading(true)
     try {
-      const auth = await authApi.login(toApiEmail(loginId), password)
+      const auth = mode === 'signup'
+        ? await authApi.register(toApiEmail(loginId), password, companyName.trim())
+        : await authApi.login(toApiEmail(loginId), password)
       login(auth)
       navigate('/dashboard')
-    } catch {
-      setError('아이디 또는 비밀번호가 올바르지 않습니다.')
+    } catch (err) {
+      setError(mode === 'signup' ? signupError(err) : LOGIN_ERROR)
     } finally {
       setLoading(false)
     }
@@ -75,13 +92,28 @@ export function LoginPage() {
               </div>
               <span className="font-bold">AI 마케팅 에이전트</span>
             </div>
-            <h1 className="text-2xl font-bold">로그인</h1>
+            <h1 className="text-2xl font-bold">{mode === 'signup' ? '업체 회원가입' : '로그인'}</h1>
             <p className="text-sm text-muted-foreground">
-              관리자로부터 발급받은 계정으로 로그인하세요.
+              {mode === 'signup'
+                ? '가입하면 업체 전용 공간이 만들어지고, 가입한 계정이 그 업체의 관리자가 됩니다.'
+                : '가입한 계정 또는 업체 관리자에게 발급받은 계정으로 로그인하세요.'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="companyName">업체명</Label>
+                <Input
+                  id="companyName"
+                  placeholder="예: 제이디엔드"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="loginId">아이디</Label>
               <Input
@@ -122,12 +154,19 @@ export function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              로그인
+              {mode === 'signup' ? '가입하고 시작하기' : '로그인'}
             </Button>
           </form>
 
           <p className="text-center text-xs text-muted-foreground">
-            계정 발급은 관리자에게 문의하세요.
+            {mode === 'signup' ? '이미 계정이 있으신가요? ' : '처음 이용하는 업체인가요? '}
+            <button
+              type="button"
+              className="font-medium text-indigo-600 hover:underline"
+              onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError('') }}
+            >
+              {mode === 'signup' ? '로그인' : '업체 회원가입'}
+            </button>
           </p>
         </div>
       </div>

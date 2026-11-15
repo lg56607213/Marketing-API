@@ -33,6 +33,7 @@ public class KeywordController {
             description = "키워드도구로 연관 키워드와 월간 검색량을 조회한다. 계정을 변경하지 않는다.")
     @GetMapping("/ideas")
     public ResponseEntity<ApiResponse<List<KeywordIdeaResponse>>> ideas(
+            @RequestParam Long accountId,
             @RequestParam String hints,
             @RequestParam(defaultValue = "false") boolean excludeRegistered,
             @RequestParam(defaultValue = "true") boolean mustContainHint) {
@@ -41,50 +42,54 @@ public class KeywordController {
                 .filter(s -> !s.isEmpty())
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(
-                keywordManagementService.findIdeas(parsed, excludeRegistered, mustContainHint)));
+                keywordManagementService.findIdeas(accountId, parsed, excludeRegistered, mustContainHint)));
     }
 
     @Operation(summary = "키워드 등록", description = "선택한 키워드를 광고그룹에 추가한다. 네이버 계정이 실제로 변경된다.")
     @PostMapping
     public ResponseEntity<ApiResponse<List<NccKeyword>>> add(
+            @RequestParam Long accountId,
             @RequestParam String nccAdgroupId,
             @RequestParam(required = false) Integer position,
             @RequestParam(required = false) String device,
             @RequestBody List<String> keywords) {
         return ResponseEntity.ok(ApiResponse.ok(
-                keywordManagementService.addKeywords(nccAdgroupId, keywords, position, device)));
+                keywordManagementService.addKeywords(accountId, nccAdgroupId, keywords, position, device)));
     }
 
     @Operation(summary = "키워드 삭제")
     @DeleteMapping("/{nccKeywordId}")
-    public ResponseEntity<ApiResponse<Void>> remove(@PathVariable String nccKeywordId) {
-        keywordManagementService.removeKeyword(nccKeywordId);
+    public ResponseEntity<ApiResponse<Void>> remove(@RequestParam Long accountId, @PathVariable String nccKeywordId) {
+        keywordManagementService.removeKeyword(accountId, nccKeywordId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @Operation(summary = "제외 키워드 조회")
     @GetMapping("/restricted")
     public ResponseEntity<ApiResponse<List<SearchAdClient.RestrictedKeyword>>> restricted(
+            @RequestParam Long accountId,
             @RequestParam String nccAdgroupId) {
-        return ResponseEntity.ok(ApiResponse.ok(keywordManagementService.listRestricted(nccAdgroupId)));
+        return ResponseEntity.ok(ApiResponse.ok(keywordManagementService.listRestricted(accountId, nccAdgroupId)));
     }
 
     @Operation(summary = "제외 키워드 추가", description = "기본 유형은 확장검색 제외(EXP_SEARCH)이다.")
     @PostMapping("/restricted")
     public ResponseEntity<ApiResponse<List<SearchAdClient.RestrictedKeyword>>> addRestricted(
+            @RequestParam Long accountId,
             @RequestParam String nccAdgroupId,
             @RequestParam(required = false) String type,
             @RequestBody List<String> keywords) {
         return ResponseEntity.ok(ApiResponse.ok(
-                keywordManagementService.addRestricted(nccAdgroupId, keywords, type)));
+                keywordManagementService.addRestricted(accountId, nccAdgroupId, keywords, type)));
     }
 
     @Operation(summary = "제외 키워드 삭제")
     @DeleteMapping("/restricted/{restrictedKeywordId}")
     public ResponseEntity<ApiResponse<Void>> removeRestricted(
+            @RequestParam Long accountId,
             @RequestParam String nccAdgroupId,
             @PathVariable String restrictedKeywordId) {
-        keywordManagementService.removeRestricted(nccAdgroupId, restrictedKeywordId);
+        keywordManagementService.removeRestricted(accountId, nccAdgroupId, restrictedKeywordId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

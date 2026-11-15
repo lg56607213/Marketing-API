@@ -11,19 +11,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 /**
  * 자격증명 없이 화면과 파이프라인을 검증하기 위한 Stub.
  * 값은 ID 와 날짜로부터 결정적으로 생성되므로 새로고침해도 흔들리지 않는다.
  */
-@Component
-@ConditionalOnProperty(name = "naver.searchad.provider", havingValue = "stub", matchIfMissing = true)
 public class StubSearchAdClient implements SearchAdClient {
 
-    private static final String CAMPAIGN_ID = "cmp-a001-01-000000001";
-    private static final String ADGROUP_ID = "grp-a001-01-000000001";
+    private final String campaignId;
+    private final String adgroupId;
+    private final String campaignId2;
+    private final String adgroupId2;
+    private final String keywordPrefix;
+
+    /** 계정마다 ID 가 겹치지 않도록 계정 번호를 ID 에 넣는다. */
+    public StubSearchAdClient(long accountId) {
+        String tag = String.format("s%03d", accountId % 1000);
+        this.campaignId = "cmp-" + tag + "-01-000000001";
+        this.adgroupId = "grp-" + tag + "-01-000000001";
+        this.campaignId2 = "cmp-" + tag + "-01-000000002";
+        this.adgroupId2 = "grp-" + tag + "-01-000000002";
+        this.keywordPrefix = "nkw-" + tag + "-01-";
+    }
 
     /** Stub 에서 승인된 입찰가 변경을 기억해 화면에서 반영 결과를 확인할 수 있게 한다. */
     private final Map<String, Long> overriddenBids = new ConcurrentHashMap<>();
@@ -37,26 +46,34 @@ public class StubSearchAdClient implements SearchAdClient {
 
     @Override
     public List<NccCampaign> listCampaigns() {
-        return List.of(new NccCampaign(CAMPAIGN_ID, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE", 50000L, false));
+        return List.of(
+                new NccCampaign(campaignId, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE", 50000L, false),
+                new NccCampaign(campaignId2, "[Stub] 차량 관리 검색광고", "WEB_SITE", "ELIGIBLE", 30000L, false));
     }
 
     @Override
     public List<NccAdgroup> listAdgroups(String nccCampaignId) {
-        if (!CAMPAIGN_ID.equals(nccCampaignId)) {
+        if (campaignId2.equals(nccCampaignId)) {
+            return List.of(new NccAdgroup(adgroupId2, campaignId2, "[Stub] 차량 관리 통합", "ELIGIBLE", 600L, 15000L, false));
+        }
+        if (!campaignId.equals(nccCampaignId)) {
             return List.of();
         }
-        return List.of(new NccAdgroup(ADGROUP_ID, CAMPAIGN_ID, "[Stub] 화물차 통합", "ELIGIBLE", 700L, 20000L, false));
+        return List.of(new NccAdgroup(adgroupId, campaignId, "[Stub] 화물차 통합", "ELIGIBLE", 700L, 20000L, false));
     }
 
     @Override
     public List<NccKeyword> listKeywords(String nccAdgroupId) {
-        if (!ADGROUP_ID.equals(nccAdgroupId)) {
+        boolean second = adgroupId2.equals(nccAdgroupId);
+        if (!second && !adgroupId.equals(nccAdgroupId)) {
             return List.of();
         }
+        // first half of the keywords belongs to campaign 1, the rest to campaign 2
+        int half = KEYWORDS.size() / 2;
         List<NccKeyword> keywords = new ArrayList<>();
-        for (int i = 0; i < KEYWORDS.size(); i++) {
+        for (int i = second ? half : 0; i < (second ? KEYWORDS.size() : half); i++) {
             keywords.add(new NccKeyword(
-                    keywordId(i), ADGROUP_ID, KEYWORDS.get(i), "ELIGIBLE",
+                    keywordId(i), nccAdgroupId, KEYWORDS.get(i), "ELIGIBLE",
                     overriddenBids.getOrDefault(keywordId(i), 500L + (i * 90L)), false, false));
         }
         return keywords;
@@ -111,7 +128,8 @@ public class StubSearchAdClient implements SearchAdClient {
             int seed = Math.abs((query + date).hashCode());
             long imp = 5 + seed % 200;
             long clk = seed % 5;
-            rows.add(new SearchQueryRow(date, CAMPAIGN_ID, ADGROUP_ID, query,
+            boolean second = i >= KEYWORDS.size() / 2;
+            rows.add(new SearchQueryRow(date, second ? campaignId2 : campaignId, second ? adgroupId2 : adgroupId, query,
                     i % 3 == 0 ? "P" : "M", imp, clk, clk * (500 + seed % 900)));
         }
         return rows;
@@ -170,7 +188,7 @@ public class StubSearchAdClient implements SearchAdClient {
     }
 
     private String keywordId(int index) {
-        return String.format("nkw-a001-01-%09d", index + 1);
+        return keywordPrefix + String.format("%09d", index + 1);
     }
 
     private double round2(double value) {

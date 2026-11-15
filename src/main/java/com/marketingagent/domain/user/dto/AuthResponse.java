@@ -1,3 +1,3 @@
 package com.marketingagent.domain.user.dto;
 
-public record AuthResponse(String token, String email, String role) {}
+public record AuthResponse(String token, String email, String role, Long companyId, String companyName) {}

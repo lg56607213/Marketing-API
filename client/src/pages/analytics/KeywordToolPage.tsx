@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { keywordToolApi } from '@/services/api'
 import type { KeywordIdea, AdGroupSummary, RestrictedKeyword } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 import { cn } from '@/lib/utils'
 
 const num = (v: number) => v.toLocaleString()
@@ -21,6 +23,7 @@ const COMPETITION_TONE: Record<string, string> = {
 }
 
 export function KeywordToolPage() {
+  const { accountId, campaignId } = useAdScopeStore()
   const [hints, setHints] = useState('')
   const [ideas, setIdeas] = useState<KeywordIdea[]>([])
   const [selected, setSelected] = useState<string[]>([])
@@ -36,14 +39,15 @@ export function KeywordToolPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!accountId) return
     keywordToolApi
       .adgroups()
       .then((list) => {
         setAdgroups(list)
-        if (list.length > 0) setTargetGroup(list[0].nccAdgroupId)
+        setTargetGroup(list.length > 0 ? list[0].nccAdgroupId : '')
       })
       .catch(() => setError('광고그룹을 불러오지 못했습니다. 먼저 검색광고 동기화를 실행하세요.'))
-  }, [])
+  }, [accountId, campaignId])
 
   const loadRestricted = useCallback(async (groupId: string) => {
     if (!groupId) return
@@ -128,6 +132,7 @@ export function KeywordToolPage() {
 
   return (
     <div className="space-y-6">
+      <AdScopeBar />
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[240px] flex-1 space-y-1">
           <Label htmlFor="hints" className="text-xs text-muted-foreground">

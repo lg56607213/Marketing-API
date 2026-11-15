@@ -16,6 +16,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { bidApi } from '@/services/api'
 import type { BidRecommendation } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 import { cn } from '@/lib/utils'
 
 const won = (v: number | null) => (v == null ? '-' : `${Math.round(v).toLocaleString()}원`)
@@ -29,6 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export function BidManagementPage() {
+  const { accountId, campaignId } = useAdScopeStore()
   const [pending, setPending] = useState<BidRecommendation[]>([])
   const [history, setHistory] = useState<BidRecommendation[]>([])
   const [selected, setSelected] = useState<number[]>([])
@@ -38,6 +41,7 @@ export function BidManagementPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!accountId) return
     setLoading(true)
     setError(null)
     try {
@@ -50,7 +54,7 @@ export function BidManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [accountId, campaignId])
 
   useEffect(() => {
     void load()
@@ -156,6 +160,7 @@ export function BidManagementPage() {
 
   return (
     <div className="space-y-6">
+      <AdScopeBar />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-emerald-600" />

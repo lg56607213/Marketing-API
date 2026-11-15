@@ -112,9 +112,10 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<ContentResponse> findAll(Long brandId) {
         if (brandId != null) {
+            brandService.getOrThrow(brandId);
             return contentRepository.findByBrandId(brandId).stream().map(ContentResponse::from).toList();
         }
-        return contentRepository.findAll().stream().map(ContentResponse::from).toList();
+        return contentRepository.findByBrand_CompanyId(CurrentUser.companyId()).stream().map(ContentResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +125,7 @@ public class ContentService {
 
     private Content getOrThrow(Long id) {
         return contentRepository.findById(id)
+                .filter(e -> e.getBrand() != null && CurrentUser.companyId().equals(e.getBrand().getCompanyId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Content not found: " + id));
     }
 

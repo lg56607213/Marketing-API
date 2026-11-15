@@ -21,7 +21,11 @@ import type {
   AdGroupSummary,
   SeoRow,
   SeoHealth,
+  AdAccount,
+  AdAccountRequest,
+  AdCampaign,
 } from '@/types'
+import { useAdScopeStore } from '@/store/adScopeStore'
 
 const http = axios.create({ baseURL: '/api' })
 
@@ -45,12 +49,29 @@ http.interceptors.response.use(
 
 const unwrap = <T>(res: { data: ApiResponse<T> }) => res.data.data
 
+/** 서버가 보낸 오류 문장을 꺼낸다. 없으면 fallback 을 쓴다. */
+export const apiMessage = (err: unknown, fallback: string): string => {
+  if (axios.isAxiosError(err)) {
+    const message = (err.response?.data as { message?: string } | undefined)?.message
+    return message || fallback
+  }
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
+// 화면 상단에서 고른 광고 계정 / 캠페인. 광고 API 는 모두 이 값을 붙여 보낸다.
+const account = () => ({ accountId: useAdScopeStore.getState().accountId ?? undefined })
+const scope = () => {
+  const { accountId, campaignId } = useAdScopeStore.getState()
+  return { accountId: accountId ?? undefined, campaignId: campaignId ?? undefined }
+}
+
 // Auth
 export const authApi = {
   login: (email: string, password: string) =>
     http.post<ApiResponse<AuthResponse>>('/auth/login', { email, password }).then(unwrap),
-  register: (email: string, password: string) =>
-    http.post<ApiResponse<AuthResponse>>('/auth/register', { email, password }).then(unwrap),
+  /** 회원가입하면 새 업체가 만들어지고 가입자가 그 업체의 관리자가 된다 */
+  register: (email: string, password: string, companyName?: string) =>
+    http.post<ApiResponse<AuthResponse>>('/auth/register', { email, password, companyName }).then(unwrap),
 }
 
 // Brand
@@ -85,31 +106,61 @@ export const contentApi = {
       .then(unwrap),
 }
 
-// Admin
+// Admin (우리 업체 사용자)
 export const adminApi = {
   listUsers: () => http.get<ApiResponse<UserSummary[]>>('/admin/users').then(unwrap),
   createUser: (email: string, password: string) =>
     http.post<ApiResponse<UserSummary>>('/admin/users', { email, password }).then(unwrap),
 }
 
+// 광고 계정 (업체가 등록한 네이버 검색광고 계정)
+export const adAccountApi = {
+  list: () => http.get<ApiResponse<AdAccount[]>>('/ads/accounts').then(unwrap),
+  create: (data: AdAccountRequest) =>
+    http.post<ApiResponse<AdAccount>>('/ads/accounts', data).then(unwrap),
+  update: (id: number, data: AdAccountRequest) =>
+    http.put<ApiResponse<AdAccount>>(`/ads/accounts/${id}`, data).then(unwrap),
+  delete: (id: number) => http.delete(`/ads/accounts/${id}`),
+  health: (id: number) =>
+    http.get<ApiResponse<AdHealth>>('/ads/health', { params: { accountId: id } }).then(unwrap),
+  campaigns: (id: number) =>
+    http.get<ApiResponse<AdCampaign[]>>('/ads/campaigns', { params: { accountId: id } }).then(unwrap),
+  setCampaignTargetCpa: (id: number, nccCampaignId: string, targetCpa: number) =>
+    http
+      .put<ApiResponse<AdCampaign>>(`/ads/campaigns/${nccCampaignId}/target-cpa`, null, {
+        params: { accountId: id, targetCpa },
+      })
+      .then(unwrap),
+}
+
 // Ads (네이버 검색광고)
 export const adsApi = {
   sync: (days = 30) =>
-    http.post<ApiResponse<AdSyncResult>>('/ads/sync', null, { params: { days } }).then(unwrap),
+    http
+      .post<ApiResponse<AdSyncResult>>('/ads/sync', null, { params: { ...account(), days } })
+      .then(unwrap),
+  campaigns: () =>
+    http.get<ApiResponse<AdCampaign[]>>('/ads/campaigns', { params: account() }).then(unwrap),
   summary: (since?: string, until?: string) =>
-    http.get<ApiResponse<AdSummary>>('/ads/summary', { params: { since, until } }).then(unwrap),
+    http
+      .get<ApiResponse<AdSummary>>('/ads/summary', { params: { ...scope(), since, until } })
+      .then(unwrap),
   keywords: (since?: string, until?: string) =>
     http
-      .get<ApiResponse<KeywordPerformance[]>>('/ads/keywords', { params: { since, until } })
+      .get<ApiResponse<KeywordPerformance[]>>('/ads/keywords', { params: { ...scope(), since, until } })
       .then(unwrap),
 }
 
 // 입찰가 조정 (추천 -> 승인 -> 반영)
 export const bidApi = {
   recommend: () =>
-    http.post<ApiResponse<BidRecommendation[]>>('/ads/bids/recommend').then(unwrap),
-  pending: () => http.get<ApiResponse<BidRecommendation[]>>('/ads/bids').then(unwrap),
-  history: () => http.get<ApiResponse<BidRecommendation[]>>('/ads/bids/history').then(unwrap),
+    http
+      .post<ApiResponse<BidRecommendation[]>>('/ads/bids/recommend', null, { params: scope() })
+      .then(unwrap),
+  pending: () =>
+    http.get<ApiResponse<BidRecommendation[]>>('/ads/bids', { params: scope() }).then(unwrap),
+  history: () =>
+    http.get<ApiResponse<BidRecommendation[]>>('/ads/bids/history', { params: scope() }).then(unwrap),
   approve: (id: number) =>
     http.post<ApiResponse<BidApplyResult>>(`/ads/bids/${id}/approve`).then(unwrap),
   reject: (id: number) =>
@@ -121,47 +172,59 @@ export const bidApi = {
 // 광고 분석 리포트 / 연동 진단
 export const adReportApi = {
   generate: (days = 7) =>
-    http.post<ApiResponse<AdReport>>('/ads/reports', null, { params: { days } }).then(unwrap),
-  list: () => http.get<ApiResponse<AdReport[]>>('/ads/reports').then(unwrap),
+    http
+      .post<ApiResponse<AdReport>>('/ads/reports', null, { params: { ...scope(), days } })
+      .then(unwrap),
+  list: () => http.get<ApiResponse<AdReport[]>>('/ads/reports', { params: scope() }).then(unwrap),
   get: (id: number) => http.get<ApiResponse<AdReport>>(`/ads/reports/${id}`).then(unwrap),
-  health: () => http.get<ApiResponse<AdHealth>>('/ads/health').then(unwrap),
+  health: () => http.get<ApiResponse<AdHealth>>('/ads/health', { params: account() }).then(unwrap),
 }
 
 // 키워드 발굴 · 등록 · 제외
 export const keywordToolApi = {
   ideas: (hints: string, excludeRegistered = false, mustContainHint = true) =>
     http
-      .get<ApiResponse<KeywordIdea[]>>('/ads/keywords/ideas', { params: { hints, excludeRegistered, mustContainHint } })
+      .get<ApiResponse<KeywordIdea[]>>('/ads/keywords/ideas', {
+        params: { ...account(), hints, excludeRegistered, mustContainHint },
+      })
       .then(unwrap),
   add: (nccAdgroupId: string, keywords: string[], position?: number, device = 'MOBILE') =>
     http
       .post<ApiResponse<unknown[]>>('/ads/keywords', keywords, {
-        params: { nccAdgroupId, position, device },
+        params: { ...account(), nccAdgroupId, position, device },
       })
       .then(unwrap),
-  remove: (nccKeywordId: string) => http.delete(`/ads/keywords/${nccKeywordId}`),
+  remove: (nccKeywordId: string) => http.delete(`/ads/keywords/${nccKeywordId}`, { params: account() }),
   restricted: (nccAdgroupId: string) =>
     http
-      .get<ApiResponse<RestrictedKeyword[]>>('/ads/keywords/restricted', { params: { nccAdgroupId } })
+      .get<ApiResponse<RestrictedKeyword[]>>('/ads/keywords/restricted', {
+        params: { ...account(), nccAdgroupId },
+      })
       .then(unwrap),
   addRestricted: (nccAdgroupId: string, keywords: string[], type = 'EXP_SEARCH') =>
     http
       .post<ApiResponse<RestrictedKeyword[]>>('/ads/keywords/restricted', keywords, {
-        params: { nccAdgroupId, type },
+        params: { ...account(), nccAdgroupId, type },
       })
       .then(unwrap),
   removeRestricted: (nccAdgroupId: string, id: string) =>
-    http.delete(`/ads/keywords/restricted/${id}`, { params: { nccAdgroupId } }),
-  adgroups: () => http.get<ApiResponse<AdGroupSummary[]>>('/ads/adgroups').then(unwrap),
+    http.delete(`/ads/keywords/restricted/${id}`, { params: { ...account(), nccAdgroupId } }),
+  adgroups: () => http.get<ApiResponse<AdGroupSummary[]>>('/ads/adgroups', { params: scope() }).then(unwrap),
 }
 
 // 유입 검색어 리포트
 export const searchQueryApi = {
   sync: (days = 7) =>
-    http.post<ApiResponse<SearchQuerySyncResult>>('/ads/search-queries/sync', null, { params: { days } }).then(unwrap),
+    http
+      .post<ApiResponse<SearchQuerySyncResult>>('/ads/search-queries/sync', null, {
+        params: { ...account(), days },
+      })
+      .then(unwrap),
   list: (since?: string, until?: string) =>
     http
-      .get<ApiResponse<SearchQueryPerformance[]>>('/ads/search-queries', { params: { since, until } })
+      .get<ApiResponse<SearchQueryPerformance[]>>('/ads/search-queries', {
+        params: { ...scope(), since, until },
+      })
       .then(unwrap),
 }
 

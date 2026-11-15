@@ -39,6 +39,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.fail("Access is denied"));
     }
 
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> missingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException exception) {
+        String name = exception.getParameterName();
+        String message = "accountId".equals(name)
+                ? "광고 계정을 선택하세요. 등록된 계정이 없다면 먼저 광고 계정을 추가하세요."
+                : "Missing parameter: " + name;
+        return ResponseEntity.badRequest().body(ApiResponse.fail(message));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> validation(MethodArgumentNotValidException exception) {
         Map<String, String> errors = new HashMap<>();

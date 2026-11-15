@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { searchQueryApi } from '@/services/api'
 import type { SearchQueryPerformance } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 import { cn } from '@/lib/utils'
 
 const won = (v: number) => `${Math.round(v).toLocaleString()}원`
@@ -14,6 +16,7 @@ const num = (v: number) => v.toLocaleString()
 type Filter = 'all' | 'expanded' | 'registered'
 
 export function SearchQueryPage() {
+  const { accountId, campaignId } = useAdScopeStore()
   const [rows, setRows] = useState<SearchQueryPerformance[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [days, setDays] = useState('7')
@@ -23,6 +26,7 @@ export function SearchQueryPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!accountId) return
     setLoading(true)
     setError(null)
     try {
@@ -33,7 +37,7 @@ export function SearchQueryPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [accountId, campaignId])
 
   useEffect(() => {
     void load()
@@ -69,6 +73,7 @@ export function SearchQueryPage() {
 
   return (
     <div className="space-y-6">
+      <AdScopeBar />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           광고가 실제로 노출된 검색어입니다. 등록 키워드뿐 아니라 확장검색으로 들어온 것까지 보입니다.

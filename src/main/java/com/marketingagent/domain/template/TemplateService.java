@@ -1,5 +1,6 @@
 package com.marketingagent.domain.template;
 
+import com.marketingagent.common.security.CurrentUser;
 import com.marketingagent.common.ContentType;
 import com.marketingagent.common.exception.ResourceNotFoundException;
 import com.marketingagent.domain.brand.BrandService;
@@ -30,6 +31,9 @@ public class TemplateService {
 
     @Transactional(readOnly = true)
     public List<TemplateResponse> findAll(Long brandId, ContentType contentType) {
+        if (brandId != null) {
+            brandService.getOrThrow(brandId);
+        }
         if (brandId != null && contentType != null) {
             return templateRepository.findByBrandIdAndContentType(brandId, contentType)
                     .stream().map(TemplateResponse::from).toList();
@@ -37,7 +41,7 @@ public class TemplateService {
         if (brandId != null) {
             return templateRepository.findByBrandId(brandId).stream().map(TemplateResponse::from).toList();
         }
-        return templateRepository.findAll().stream().map(TemplateResponse::from).toList();
+        return templateRepository.findByBrand_CompanyId(CurrentUser.companyId()).stream().map(TemplateResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -59,6 +63,7 @@ public class TemplateService {
 
     private Template getOrThrow(Long id) {
         return templateRepository.findById(id)
+                .filter(e -> e.getBrand() != null && CurrentUser.companyId().equals(e.getBrand().getCompanyId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found: " + id));
     }
 }

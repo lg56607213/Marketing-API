@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ContentRepository extends JpaRepository<Content, Long> {
     List<Content> findByAuthorId(Long authorId);
     List<Content> findByBrandId(Long brandId);
+    List<Content> findByBrand_CompanyId(Long companyId);
     List<Content> findByBrandIdAndStatus(Long brandId, ContentStatus status);
     List<Content> findByBrandIdAndContentType(Long brandId, ContentType contentType);
 }

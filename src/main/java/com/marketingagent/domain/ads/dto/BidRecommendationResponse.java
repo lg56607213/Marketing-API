@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 public record BidRecommendationResponse(
         Long id,
+        String nccCampaignId,
         String nccKeywordId,
         String keyword,
         long currentBid,
@@ -33,7 +34,7 @@ public record BidRecommendationResponse(
         double rate = r.getCurrentBid() == 0 ? 0.0
                 : Math.round(change * 1000.0 / r.getCurrentBid()) / 10.0;
         return new BidRecommendationResponse(
-                r.getId(), r.getNccKeywordId(), r.getKeyword(), r.getCurrentBid(), r.getRecommendedBid(),
+                r.getId(), r.getNccCampaignId(), r.getNccKeywordId(), r.getKeyword(), r.getCurrentBid(), r.getRecommendedBid(),
                 change, rate, change > 0 ? "UP" : "DOWN", r.getReason(), r.getSince(), r.getUntil(),
                 r.getImpCnt(), r.getClkCnt(), r.getSalesAmt(), r.getCcnt(), r.getCtr(), r.getAvgRnk(),
                 r.getStrategy().name(), r.getStatus().name(), r.getAppliedBid(), r.getDecidedAt(), r.getResultMessage());

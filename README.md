@@ -19,6 +19,24 @@ Java 21, Spring Boot 3, JPA 기반의 AI 마케팅 콘텐츠 생성 + 네이버 
 - AdReport: 기간별 성과 분석 리포트
 - SearchAdClient: 네이버 실제 API와 Stub 교체 가능
 
+## 여러 업체 · 여러 광고 계정
+
+- **업체(Company)**: 회원가입(`POST /api/auth/register`, `companyName` 포함)을 하면 새 업체가 만들어지고
+  가입자가 그 업체의 관리자(ADMIN)가 됩니다. 관리자는 `POST /api/admin/users` 로 자기 업체에 사용자를 추가합니다.
+- **격리**: 브랜드·콘텐츠·광고 계정·성과·입찰 추천·리포트는 모두 업체 단위로 나뉩니다.
+  다른 업체의 ID 를 직접 넣어 호출해도 404 로 응답합니다.
+- **광고 계정(AdAccount)**: 한 업체가 네이버 검색광고 계정을 여러 개 등록할 수 있습니다.
+  화면의 「광고 계정 관리」 또는 `POST /api/ads/accounts` 로 고객 ID · 액세스 라이선스 · 비밀키를 넣습니다.
+  비밀키는 `APP_ENCRYPTION_KEY` 로 암호화해 저장하고 응답으로 내보내지 않습니다.
+- **캠페인 필터**: 광고 API 는 `accountId`(필수)와 `campaignId`(선택)를 받습니다.
+  사이트별로 캠페인을 나눠 두면 성과·유입 검색어·입찰 추천·리포트를 사이트별로 볼 수 있습니다.
+- **캠페인별 목표 CPA**: `PUT /api/ads/campaigns/{nccCampaignId}/target-cpa?accountId=&targetCpa=`.
+  입찰가 추천은 캠페인 목표 → 계정 기본 목표 → `ADS_TARGET_CPA` → 그 캠페인의 실제 평균 CPA 순으로 기준을 찾고,
+  CTR 비교도 계정 전체가 아니라 같은 캠페인 평균과 합니다.
+- **기존 데이터**: 업체/계정 구분이 없던 데이터는 첫 기동 때 "기본 업체"와 기본 광고 계정으로 옮겨집니다.
+  `NAVER_SEARCHAD_PROVIDER=naver` 와 자격증명 환경변수가 있으면 그 값으로 기본 광고 계정을 만들고,
+  없으면 예시 데이터 계정을 만듭니다. 이후에는 환경변수가 아니라 등록된 계정을 씁니다.
+
 ## 주요 API
 
 ### 콘텐츠
@@ -31,7 +49,15 @@ Java 21, Spring Boot 3, JPA 기반의 AI 마케팅 콘텐츠 생성 + 네이버 
 - GET /api/template
 - GET /api/prompt
 
+### 광고 계정
+- GET /api/ads/accounts — 우리 업체의 광고 계정 목록
+- POST /api/ads/accounts — 등록 (관리자). `provider: "stub"` 이면 예시 데이터 계정
+- PUT /api/ads/accounts/{id} — 이름·기본 목표 CPA·자격증명 수정 (관리자)
+- DELETE /api/ads/accounts/{id} — 계정과 쌓인 데이터 삭제 (관리자)
+
 ### 검색광고 성과
+아래 광고 API 는 모두 `accountId` 가 필요하고, 조회·추천·리포트는 `campaignId` 로 범위를 좁힐 수 있습니다.
+
 - GET /api/ads/health — 연동 상태 자가진단
 - POST /api/ads/sync?days=30 — 캠페인·키워드·성과 적재
 - GET /api/ads/summary — 기간 요약 (노출·클릭·CTR·CPC·CVR·CPA)
@@ -195,7 +221,9 @@ source .env.local && ./gradlew bootRun
 ```
 
 첫 실행 시 Flyway가 `V1__init.sql`(콘텐츠) → `V2__ads.sql`(검색광고) →
-`V3__ad_reports.sql`(리포트) 순으로 적용합니다.
+`V3__ad_reports.sql`(리포트) → `V4`(입찰 전략) → `V5`(유입 검색어) →
+`V6__companies_and_ad_accounts.sql`(업체·광고 계정) 순으로 적용합니다.
+V6 은 H2 에서만 검증했고 실제 MySQL 에는 아직 적용해 보지 않았으니, 운영 DB 에 올리기 전에 사본으로 먼저 돌려 보세요.
 `JPA_DDL_AUTO=validate` 이므로 엔티티와 스키마가 어긋나면 기동 단계에서 즉시 실패합니다.
 
 ### 주의

@@ -4,6 +4,8 @@ public record KeywordPerformance(
         String nccKeywordId,
         String keyword,
         String adgroupName,
+        String nccCampaignId,
+        String campaignName,
         String status,
         Long bidAmt,
         long impCnt,

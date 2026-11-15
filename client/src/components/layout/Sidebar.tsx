@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, FolderOpen, Wand2, BarChart3, History,
   ImageIcon, Settings, Building2, Users, LogOut, Zap,
-  TrendingUp, Radio, Globe, MousePointerClick, Gavel, FileBarChart, Lightbulb, ListFilter, Globe2 } from 'lucide-react'
+  TrendingUp, Radio, Globe, MousePointerClick, Gavel, FileBarChart, Lightbulb, ListFilter, Globe2, KeyRound } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -26,6 +26,7 @@ const analyticsItems = [
   { to: '/analytics/search-queries', icon: ListFilter, label: '유입 검색어', exact: false },
   { to: '/analytics/keywords', icon: Lightbulb, label: '키워드 발굴', exact: false },
   { to: '/analytics/competitors', icon: Globe, label: '경쟁사 분석', exact: false },
+  { to: '/analytics/accounts', icon: KeyRound, label: '광고 계정 관리', exact: false },
 ]
 
 const bottomNavItems = [
@@ -48,7 +49,7 @@ const NAV_CLS = (isActive: boolean) =>
   )
 
 export function Sidebar() {
-  const { displayId, role, logout } = useAuthStore()
+  const { displayId, role, companyName, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -158,7 +159,7 @@ export function Sidebar() {
           </Avatar>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-200">{displayId}</p>
-            <p className="text-[10px] text-slate-500">{role === 'ADMIN' ? '관리자' : '사용자'}</p>
+            <p className="text-[10px] text-slate-500">{companyName ? `${companyName} · ` : ''}{role === 'ADMIN' ? '관리자' : '사용자'}</p>
           </div>
         </div>
         <Button

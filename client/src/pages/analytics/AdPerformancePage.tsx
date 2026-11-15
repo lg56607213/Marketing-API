@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { adsApi } from '@/services/api'
 import type { AdSummary, KeywordPerformance } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 import { cn } from '@/lib/utils'
 
 const daysAgo = (n: number) => {
@@ -19,6 +21,7 @@ const won = (v: number) => `${Math.round(v).toLocaleString()}원`
 const num = (v: number) => v.toLocaleString()
 
 export function AdPerformancePage() {
+  const { accountId, campaignId, bump } = useAdScopeStore()
   const [since, setSince] = useState(daysAgo(30))
   const [until, setUntil] = useState(daysAgo(1))
   const [summary, setSummary] = useState<AdSummary | null>(null)
@@ -28,6 +31,7 @@ export function AdPerformancePage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!accountId) return
     setLoading(true)
     setError(null)
     try {
@@ -39,7 +43,7 @@ export function AdPerformancePage() {
     } finally {
       setLoading(false)
     }
-  }, [since, until])
+  }, [since, until, accountId, campaignId])
 
   useEffect(() => {
     void load()
@@ -50,6 +54,7 @@ export function AdPerformancePage() {
     setError(null)
     try {
       await adsApi.sync(30)
+      bump()
       await load()
     } catch {
       setError('동기화에 실패했습니다. 네이버 검색광고 자격증명 설정을 확인하세요.')
@@ -73,6 +78,7 @@ export function AdPerformancePage() {
 
   return (
     <div className="space-y-6">
+      <AdScopeBar />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
