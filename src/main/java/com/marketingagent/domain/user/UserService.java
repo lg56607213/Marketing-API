@@ -1,5 +1,6 @@
 package com.marketingagent.domain.user;
 
+import com.marketingagent.common.exception.BadRequestException;
 import com.marketingagent.common.exception.DuplicateResourceException;
 import com.marketingagent.common.exception.UnauthorizedException;
 import com.marketingagent.common.security.CurrentUser;
@@ -11,6 +12,7 @@ import com.marketingagent.domain.user.dto.RegisterRequest;
 import com.marketingagent.security.JwtService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +26,19 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    /** 공개 운영 중 아무나 업체를 만들지 못하게 막을 수 있다. */
+    @Value("${app.signup-enabled:true}")
+    private boolean signupEnabled;
+
     /**
      * 회원가입. 가입자마다 새 업체를 만들고 그 업체의 관리자로 등록한다.
      * 같은 업체에 사람을 더 넣으려면 관리자가 {@link #createMember} 로 추가한다.
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (!signupEnabled) {
+            throw new BadRequestException("지금은 새 회원가입을 받지 않습니다. 관리자에게 문의하세요.");
+        }
         requireNewEmail(request.email());
         String companyName = request.companyName() != null && !request.companyName().isBlank()
                 ? request.companyName().trim()

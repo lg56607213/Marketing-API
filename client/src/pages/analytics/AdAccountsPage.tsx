@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { adAccountApi, apiMessage } from '@/services/api'
+import { useNavigate } from 'react-router-dom'
+import { adAccountApi, adsApi, apiMessage } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useAdScopeStore } from '@/store/adScopeStore'
 import type { AdAccount, AdCampaign } from '@/types'
@@ -23,6 +24,7 @@ export function AdAccountsPage() {
   const { role } = useAuthStore()
   const { accountId, setAccount, bump } = useAdScopeStore()
   const isAdmin = role === 'ADMIN'
+  const navigate = useNavigate()
 
   const [accounts, setAccounts] = useState<AdAccount[]>([])
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([])
@@ -97,7 +99,16 @@ export function AdAccountsPage() {
       setForm(emptyForm)
       await loadAccounts()
       setAccount(created.id)
-      return `"${created.name}" 계정을 등록했습니다. 「연결 확인」으로 자격증명을 점검한 뒤 동기화하세요.`
+      // 키는 서버가 저장 전에 네이버로 확인했다. 곧바로 캠페인·키워드·최근 30일 성과를 받아 두고 목표 상담으로 넘어간다.
+      setNotice(`"${created.name}" 키를 확인했습니다. 캠페인과 최근 30일 성과를 가져오는 중입니다…`)
+      try {
+        await adsApi.sync(30)
+        bump()
+      } catch (err) {
+        return `"${created.name}" 계정은 등록했지만 성과를 가져오지 못했습니다: ${apiMessage(err, '동기화 실패')}. 아래 「동기화」로 다시 시도하세요.`
+      }
+      navigate('/goals')
+      return `"${created.name}" 연결을 마쳤습니다.`
     }, '계정 등록에 실패했습니다.')
 
   const addStub = () =>

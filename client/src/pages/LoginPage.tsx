@@ -25,26 +25,32 @@ export function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const isSignup = mode === 'signup'
   const { login } = useAuthStore()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!loginId || !password) { setError('아이디와 비밀번호를 모두 입력해 주세요.'); return }
-    if (mode === 'signup') {
+    if (isSignup) {
       if (!companyName.trim()) { setError('업체명을 입력해 주세요.'); return }
+      if (!/^[a-zA-Z0-9._-]{3,30}$/.test(loginId)) {
+        setError('아이디는 영문, 숫자, . _ - 만 써서 3~30자로 입력해 주세요.')
+        return
+      }
       if (password.length < 8) { setError('비밀번호는 8자 이상이어야 합니다.'); return }
     }
     setError('')
     setLoading(true)
     try {
-      const auth = mode === 'signup'
+      const auth = isSignup
         ? await authApi.register(toApiEmail(loginId), password, companyName.trim())
         : await authApi.login(toApiEmail(loginId), password)
       login(auth)
-      navigate('/dashboard')
+      // 가입 직후에는 네이버 광고 계정부터 연결한다. 연결해야 목표 상담과 분석을 할 수 있다.
+      navigate(isSignup ? '/analytics/accounts' : '/dashboard')
     } catch (err) {
-      setError(mode === 'signup' ? signupError(err) : LOGIN_ERROR)
+      setError(isSignup ? signupError(err) : LOGIN_ERROR)
     } finally {
       setLoading(false)
     }
@@ -92,16 +98,16 @@ export function LoginPage() {
               </div>
               <span className="font-bold">AI 마케팅 에이전트</span>
             </div>
-            <h1 className="text-2xl font-bold">{mode === 'signup' ? '업체 회원가입' : '로그인'}</h1>
+            <h1 className="text-2xl font-bold">{isSignup ? '업체 회원가입' : '로그인'}</h1>
             <p className="text-sm text-muted-foreground">
-              {mode === 'signup'
+              {isSignup
                 ? '가입하면 업체 전용 공간이 만들어지고, 가입한 계정이 그 업체의 관리자가 됩니다.'
                 : '가입한 계정 또는 업체 관리자에게 발급받은 계정으로 로그인하세요.'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
+            {isSignup && (
               <div className="space-y-1.5">
                 <Label htmlFor="companyName">업체명</Label>
                 <Input
@@ -132,10 +138,10 @@ export function LoginPage() {
                 <Input
                   id="password"
                   type={showPw ? 'text' : 'password'}
-                  placeholder="비밀번호를 입력하세요"
+                  placeholder={isSignup ? '8자 이상' : '비밀번호를 입력하세요'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
                   className="pr-10"
                 />
                 <button
@@ -154,18 +160,18 @@ export function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {mode === 'signup' ? '가입하고 시작하기' : '로그인'}
+              {isSignup ? '가입하고 시작하기' : '로그인'}
             </Button>
           </form>
 
           <p className="text-center text-xs text-muted-foreground">
-            {mode === 'signup' ? '이미 계정이 있으신가요? ' : '처음 이용하는 업체인가요? '}
+            {isSignup ? '이미 계정이 있으신가요? ' : '처음 이용하는 업체인가요? '}
             <button
               type="button"
               className="font-medium text-indigo-600 hover:underline"
-              onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError('') }}
+              onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError('') }}
             >
-              {mode === 'signup' ? '로그인' : '업체 회원가입'}
+              {isSignup ? '로그인' : '업체 회원가입'}
             </button>
           </p>
         </div>

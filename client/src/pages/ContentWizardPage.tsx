@@ -14,13 +14,15 @@ import { cn } from '@/lib/utils'
 
 const STEPS = [
   { id: 1, title: '주제 입력', desc: '어떤 내용을 작성할지 입력하세요' },
-  { id: 2, title: '키워드 선택', desc: 'AI 추천 키워드를 선택하세요' },
+  { id: 2, title: '키워드 선택', desc: '실제로 검색되는 연관 키워드에서 고르세요' },
   { id: 3, title: '뉴스 분석', desc: '관련 최신 뉴스를 참고하세요' },
   { id: 4, title: '콘텐츠 유형', desc: '형식과 채널을 선택하세요' },
   { id: 5, title: '작성 스타일', desc: '톤과 보이스를 설정하세요' },
   { id: 6, title: 'AI 생성 중', desc: 'AI가 콘텐츠를 작성합니다' },
   { id: 7, title: '검토 및 내보내기', desc: '생성된 콘텐츠를 확인하세요' },
 ]
+
+const VISIBLE_STEPS = STEPS.filter((s) => s.id !== 3)
 
 export function ContentWizardPage() {
   const [step, setStep] = useState(1)
@@ -54,8 +56,9 @@ export function ContentWizardPage() {
     return true
   }
 
-  const next = () => { if (step < 7) { if (step === 5) setGenerating(true); setStep(step + 1) } }
-  const prev = () => { if (step > 1 && step !== 6) setStep(step - 1) }
+  // 3단계(뉴스 분석)는 실제 뉴스 검색이 연동되기 전까지 건너뛴다. 지어낸 뉴스를 보여 주지 않기 위해서다.
+  const next = () => { if (step < 7) { if (step === 5) setGenerating(true); setStep(step === 2 ? 4 : step + 1) } }
+  const prev = () => { if (step > 1 && step !== 6) setStep(step === 4 ? 2 : step - 1) }
 
   const handleGenDone = (c: ContentResponse) => {
     setGeneratedContent(c)
@@ -73,7 +76,7 @@ export function ContentWizardPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       {/* 단계 표시 */}
       <div className="flex items-center gap-0">
-        {STEPS.map((s, i) => (
+        {VISIBLE_STEPS.map((s, i) => (
           <div key={s.id} className="flex items-center flex-1 last:flex-none">
             <div className="flex flex-col items-center gap-1">
               <div
@@ -86,13 +89,13 @@ export function ContentWizardPage() {
                     : 'bg-muted text-muted-foreground'
                 )}
               >
-                {step > s.id ? <Check className="h-4 w-4" /> : s.id}
+                {step > s.id ? <Check className="h-4 w-4" /> : i + 1}
               </div>
               <span className={cn('text-[10px] font-medium hidden sm:block', step === s.id ? 'text-indigo-600' : 'text-muted-foreground')}>
                 {s.title}
               </span>
             </div>
-            {i < STEPS.length - 1 && (
+            {i < VISIBLE_STEPS.length - 1 && (
               <div className={cn('h-0.5 flex-1 mx-1 mb-3', step > s.id ? 'bg-emerald-400' : 'bg-border')} />
             )}
           </div>

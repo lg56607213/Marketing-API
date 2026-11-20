@@ -1,113 +1,98 @@
-import { BarChart3, TrendingUp, Search, MousePointerClick, Eye, FileText, Zap, Clock } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { AdOverview } from '@/features/ads/AdOverview'
+import { adsApi, marketApi } from '@/services/api'
+import type { HourOfDay, KeywordPerformance } from '@/types'
+import { AdScopeBar } from '@/components/ads/AdScopeBar'
+import { useAdScopeStore } from '@/store/adScopeStore'
 
-const widgets = [
-  {
-    title: '방문자 추이',
-    icon: TrendingUp,
-    color: 'text-indigo-500',
-    bg: 'bg-indigo-50',
-    desc: '일별/주별/월별 방문자 추이',
-    status: '준비 중',
-  },
-  {
-    title: '키워드 순위',
-    icon: Search,
-    color: 'text-emerald-500',
-    bg: 'bg-emerald-50',
-    desc: '검색 엔진별 SEO 키워드 순위',
-    status: '준비 중',
-  },
-  {
-    title: 'SEO 점수',
-    icon: BarChart3,
-    color: 'text-violet-500',
-    bg: 'bg-violet-50',
-    desc: '콘텐츠 SEO 건강 상태 및 최적화 점수',
-    status: '준비 중',
-  },
-  {
-    title: '클릭률(CTR)',
-    icon: MousePointerClick,
-    color: 'text-amber-500',
-    bg: 'bg-amber-50',
-    desc: '채널별 게시된 콘텐츠 CTR',
-    status: '준비 중',
-  },
-  {
-    title: '검색 볼륨',
-    icon: Eye,
-    color: 'text-sky-500',
-    bg: 'bg-sky-50',
-    desc: '추적 키워드의 월간 검색 볼륨',
-    status: '준비 중',
-  },
-  {
-    title: '콘텐츠 성과',
-    icon: FileText,
-    color: 'text-rose-500',
-    bg: 'bg-rose-50',
-    desc: '콘텐츠별 참여도, 공유, 전환율',
-    status: '준비 중',
-  },
-  {
-    title: 'AI 사용 통계',
-    icon: Zap,
-    color: 'text-orange-500',
-    bg: 'bg-orange-50',
-    desc: 'AI 생성 횟수, 토큰, 비용 분석',
-    status: '준비 중',
-  },
-  {
-    title: '게시까지 소요 시간',
-    icon: Clock,
-    color: 'text-teal-500',
-    bg: 'bg-teal-50',
-    desc: '초안에서 게시까지 평균 소요 시간',
-    status: '준비 중',
-  },
-]
+const won = (v: number) => `${Math.round(v).toLocaleString()}원`
+const num = (v: number) => Math.round(v).toLocaleString()
 
+/** 광고 실적 개요. 수집된 실제 데이터만 보여 준다. */
 export function AnalyticsPage() {
+  const [keywords, setKeywords] = useState<KeywordPerformance[]>([])
+  const [hours, setHours] = useState<HourOfDay[]>([])
+  const { accountId } = useAdScopeStore()
+
+  useEffect(() => {
+    setKeywords([])
+    setHours([])
+    if (!accountId) return
+    adsApi.keywords().then((rows) => setKeywords([...rows].sort((a, b) => b.salesAmt - a.salesAmt).slice(0, 8))).catch(() => {})
+    marketApi.hourly().then(setHours).catch(() => {})
+  }, [accountId])
+
+  const maxClicks = Math.max(1, ...hours.map((h) => h.clkCnt))
+  const busiest = [...hours].sort((a, b) => b.clkCnt - a.clkCnt)[0]
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">애널리틱스 연동 기능이 개발 중입니다. 아래 위젯은 예정된 기능을 미리 보여줍니다.</p>
-        </div>
-        <Badge variant="secondary" className="shrink-0 ml-auto">베타 미리보기</Badge>
-      </div>
+      <AdScopeBar showCampaign={false} />
+      <p className="text-sm text-muted-foreground">
+        네이버 검색광고에서 실제로 수집한 최근 30일 실적입니다. 숫자가 비어 있으면 아직 수집된 데이터가 없는 것입니다.
+      </p>
 
-      {/* 차트 플레이스홀더 */}
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <BarChart3 className="h-14 w-14 text-muted-foreground/30 mb-4" />
-          <p className="font-medium text-muted-foreground">애널리틱스 대시보드</p>
-          <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm">
-            Google Analytics, Search Console 등 애널리틱스 제공업체를 연결하면 실시간 인사이트를 확인할 수 있습니다.
-          </p>
-        </CardContent>
-      </Card>
+      <AdOverview />
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {widgets.map(({ title, icon: Icon, color, bg, desc, status }) => (
-          <Card key={title} className="relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 -mr-6 -mt-6 rounded-full opacity-10 bg-gradient-to-br from-current to-transparent" />
-            <CardHeader className="pb-2">
-              <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-2`}>
-                <Icon className={`h-5 w-5 ${color}`} />
-              </div>
-              <CardTitle className="text-sm">{title}</CardTitle>
-              <CardDescription className="text-xs">{desc}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-8 bg-muted/50 rounded animate-pulse" />
-              <Badge variant="outline" className="mt-2 text-[10px]">{status}</Badge>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {hours.some((h) => h.clkCnt > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">하루 중 언제 클릭되는가</CardTitle>
+            <CardDescription className="text-xs">
+              최근 7일 · 0시~23시{busiest ? ` · 가장 많은 시간대는 ${busiest.hour}시 (클릭 ${num(busiest.clkCnt)}회)` : ''}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex h-24 items-end gap-1">
+              {hours.map((h) => (
+                <div key={h.hour} className="flex flex-1 flex-col items-center gap-1"
+                  title={`${h.hour}시 · 클릭 ${num(h.clkCnt)}회 · 광고비 ${won(h.salesAmt)} · 전환 ${num(h.convCnt)}건`}>
+                  <span className="w-full rounded-t bg-indigo-400" style={{ height: `${Math.max(2, (h.clkCnt / maxClicks) * 72)}px` }} />
+                  <span className="text-[9px] text-muted-foreground">{h.hour % 3 === 0 ? h.hour : ''}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {keywords.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">광고비를 가장 많이 쓴 키워드</CardTitle>
+            <CardDescription className="text-xs">최근 30일</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 text-xs text-muted-foreground">
+                    <th className="px-6 py-2.5 text-left font-semibold">키워드</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">광고비</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">클릭</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">클릭률</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">전환</th>
+                    <th className="px-6 py-2.5 text-right font-semibold">전환 1건당</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {keywords.map((k) => (
+                    <tr key={k.nccKeywordId}>
+                      <td className="px-6 py-2.5 font-medium">{k.keyword}</td>
+                      <td className="px-3 py-2.5 text-right">{won(k.salesAmt)}</td>
+                      <td className="px-3 py-2.5 text-right">{num(k.clkCnt)}</td>
+                      <td className="px-3 py-2.5 text-right">{k.ctr.toFixed(2)}%</td>
+                      <td className="px-3 py-2.5 text-right">{num(k.ccnt)}</td>
+                      <td className="px-6 py-2.5 text-right">{k.ccnt > 0 ? won(k.salesAmt / k.ccnt) : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

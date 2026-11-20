@@ -46,6 +46,11 @@ public class User extends BaseEntity implements AuthenticatedUser, UserDetails {
         this.companyId = companyId;
     }
 
+    /** @param encodedPassword 이미 암호화한 비밀번호 */
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

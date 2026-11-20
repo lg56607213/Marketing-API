@@ -3,10 +3,14 @@ package com.marketingagent.integration.naver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketingagent.common.exception.BadRequestException;
+import com.marketingagent.integration.naver.dto.ConversionRow;
+import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.net.URI;
@@ -30,6 +34,7 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * 네이버 검색광고 API 실제 클라이언트.
  * 모든 요청에 X-Timestamp / X-API-KEY / X-Customer / X-Signature 헤더를 붙인다.
+ * 자격증명은 요청마다 지금 일하고 있는 회원의 것을 받아 쓴다.
  */
 @Slf4j
 public class NaverSearchAdClient implements SearchAdClient {
@@ -138,8 +143,9 @@ public class NaverSearchAdClient implements SearchAdClient {
     @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
         String path = "/ncc/keywords/" + nccKeywordId;
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "PUT", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
         URI uri = URI.create(properties.baseUrl() + path + "?fields=bidAmt");
 
         Map<String, Object> body = Map.of(
@@ -153,8 +159,8 @@ public class NaverSearchAdClient implements SearchAdClient {
             NccKeyword updated = restClient.put()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -172,8 +178,16 @@ public class NaverSearchAdClient implements SearchAdClient {
         }
     }
 
+    private NaverCredentials credentials() {
+        return properties;
+    }
+
     @Override
     public Map<String, Long> estimateBidForPosition(List<String> keywords, int position, String device) {
+        return doEstimateBidForPosition(keywords, position, device);
+    }
+
+    private Map<String, Long> doEstimateBidForPosition(List<String> keywords, int position, String device) {
         Map<String, Long> result = new LinkedHashMap<>();
         if (keywords.isEmpty()) {
             return result;
@@ -185,15 +199,16 @@ public class NaverSearchAdClient implements SearchAdClient {
                 .toList();
         Map<String, Object> body = Map.of("device", device, "items", items, "keywordplus", false);
 
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
 
         try {
             JsonNode response = restClient.post()
                     .uri(URI.create(properties.baseUrl() + path))
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -215,6 +230,10 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<RelatedKeyword> relatedKeywords(List<String> hints) {
+        return doRelatedKeywords(hints);
+    }
+
+    private List<RelatedKeyword> doRelatedKeywords(List<String> hints) {
         if (hints.isEmpty()) {
             return List.of();
         }
@@ -247,63 +266,73 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     @Override
     public List<SearchQueryRow> searchQueryReport(LocalDate date) {
-        String statDt = date.format(DateTimeFormatter.BASIC_ISO_DATE);
-        JsonNode job = post("/stat-reports", Map.of("reportTp", "EXPKEYWORD", "statDt", statDt));
-        long jobId = job.path("reportJobId").asLong();
-        if (jobId == 0) {
-            log.warn("검색어 리포트 생성에 실패했습니다: {}", job);
-            return List.of();
-        }
-
-        String downloadUrl = awaitReport(jobId);
-        if (downloadUrl == null) {
-            return List.of();
-        }
-
-        List<SearchQueryRow> rows = new ArrayList<>();
-        for (String line : getRaw(downloadUrl).split("\\r?\\n")) {
-            if (line.isBlank()) {
-                continue;
-            }
-            String[] c = line.split("\\t");
-            if (c.length < 11) {
-                continue;
-            }
-            rows.add(new SearchQueryRow(date, c[2], c[3], c[4], c[6],
-                    parseLong(c[8]), parseLong(c[9]), parseLong(c[10])));
-        }
-        return rows;
+        return StatReportParser.searchQueries(date, downloadReport(StatReportParser.EXPKEYWORD, date));
     }
 
-    /** 리포트는 비동기로 만들어진다. BUILT 가 될 때까지 짧게 기다린다. */
-    private String awaitReport(long jobId) {
+    @Override
+    public List<HourlyStatRow> hourlyStatReport(LocalDate date) {
+        return StatReportParser.hourlyStats(date, downloadReport(StatReportParser.AD_DETAIL, date));
+    }
+
+    @Override
+    public List<ConversionRow> conversionReport(LocalDate date) {
+        return StatReportParser.conversions(date, downloadReport(StatReportParser.AD_CONVERSION_DETAIL, date));
+    }
+
+    @Override
+    public ReportProbe probeReport(String reportTp, LocalDate date) {
+        List<String[]> lines = StatReportParser.split(downloadReport(reportTp, date));
+        return new ReportProbe(lines.size(), lines.isEmpty() ? 0 : lines.get(0).length);
+    }
+
+    /**
+     * 대용량 보고서를 만들고 완성되면 본문을 내려받는다.
+     *
+     * @return 탭 구분 본문. 그 날짜에 데이터가 없으면 빈 문자열
+     * @throws IllegalStateException 리포트 생성이 실패했거나 제한 시간 안에 끝나지 않은 경우
+     */
+    private String downloadReport(String reportTp, LocalDate date) {
+        String statDt = date.format(DateTimeFormatter.BASIC_ISO_DATE);
+        JsonNode job = post("/stat-reports", Map.of("reportTp", reportTp, "statDt", statDt));
+        long jobId = job.path("reportJobId").asLong();
+        if (jobId == 0) {
+            throw new IllegalStateException(reportTp + " 리포트 생성 요청이 거부됐습니다: " + job);
+        }
+        String downloadUrl = awaitReport(reportTp, jobId);
+        return downloadUrl == null ? "" : getRaw(downloadUrl);
+    }
+
+    /**
+     * 리포트는 비동기로 만들어진다. BUILT 가 될 때까지 짧게 기다린다.
+     *
+     * @return 다운로드 URL. 데이터가 없다고 응답한 날(NONE)이면 null
+     */
+    private String awaitReport(String reportTp, long jobId) {
         for (int attempt = 0; attempt < REPORT_MAX_ATTEMPTS; attempt++) {
             JsonNode info = get("/stat-reports/" + jobId, "", new ParameterizedTypeReference<JsonNode>() {});
             String status = info.path("status").asText();
             if ("BUILT".equals(status)) {
-                return info.path("downloadUrl").asText(null);
+                String url = info.path("downloadUrl").asText(null);
+                if (url == null || url.isBlank()) {
+                    throw new IllegalStateException(reportTp + " 리포트에 다운로드 주소가 없습니다: " + info);
+                }
+                return url;
             }
-            if ("ERROR".equals(status) || "NONE".equals(status)) {
-                log.warn("검색어 리포트 생성 실패: {}", info);
+            if ("NONE".equals(status)) {
+                log.info("{} 리포트에 데이터가 없습니다: jobId={}", reportTp, jobId);
                 return null;
+            }
+            if ("ERROR".equals(status)) {
+                throw new IllegalStateException(reportTp + " 리포트 생성이 실패했습니다: " + info);
             }
             try {
                 Thread.sleep(REPORT_POLL_INTERVAL_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return null;
+                throw new IllegalStateException(reportTp + " 리포트 대기가 중단됐습니다.");
             }
         }
-        log.warn("검색어 리포트가 제한 시간 안에 완성되지 않았습니다: jobId={}", jobId);
-        return null;
-    }
-
-    private long parseLong(String value) {
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
+        throw new IllegalStateException(reportTp + " 리포트가 제한 시간 안에 완성되지 않았습니다: jobId=" + jobId);
     }
 
     @Override
@@ -370,14 +399,15 @@ public class NaverSearchAdClient implements SearchAdClient {
 
     private JsonNode post(String pathWithQuery, Object body) {
         String path = pathWithQuery.split("\\?")[0];
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "POST", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "POST", path);
         try {
             JsonNode response = restClient.post()
                     .uri(URI.create(properties.baseUrl() + pathWithQuery))
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
@@ -390,16 +420,81 @@ public class NaverSearchAdClient implements SearchAdClient {
         }
     }
 
-    private void delete(String path, String query) {
+    /** 성과 예측은 한 번에 200건까지 받는다. */
+    private static final int ESTIMATE_CHUNK = 200;
+
+    @Override
+    public List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        return doEstimatePerformance(queries, device);
+    }
+
+    private List<PerformanceEstimate> doEstimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        List<PerformanceEstimate> result = new ArrayList<>();
+        for (int from = 0; from < queries.size(); from += ESTIMATE_CHUNK) {
+            List<Map<String, Object>> items = queries.subList(from, Math.min(from + ESTIMATE_CHUNK, queries.size()))
+                    .stream()
+                    .map(q -> Map.<String, Object>of("device", device, "keyword", q.keyword(), "bid", q.bid()))
+                    .toList();
+            JsonNode response = post("/estimate/performance-bulk", Map.of("items", items));
+            for (JsonNode node : response.path("items")) {
+                result.add(new PerformanceEstimate(node.path("keyword").asText(), node.path("bid").asLong(),
+                        node.path("impressions").asLong(), node.path("clicks").asLong(),
+                        node.path("cost").asLong()));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public long updateCampaignDailyBudget(String nccCampaignId, long dailyBudget) {
+        JsonNode updated = put("/ncc/campaigns/" + nccCampaignId, "fields=budget", Map.of(
+                "nccCampaignId", nccCampaignId,
+                "dailyBudget", dailyBudget,
+                "useDailyBudget", true));
+        return updated.path("dailyBudget").asLong(dailyBudget);
+    }
+
+    @Override
+    public void setKeywordPaused(String nccKeywordId, String nccAdgroupId, boolean paused) {
+        put("/ncc/keywords/" + nccKeywordId, "fields=userLock", Map.of(
+                "nccKeywordId", nccKeywordId,
+                "nccAdgroupId", nccAdgroupId,
+                "userLock", paused));
+    }
+
+    private JsonNode put(String path, String query, Object body) {
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "DELETE", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "PUT", path);
+        try {
+            JsonNode response = restClient.put()
+                    .uri(URI.create(properties.baseUrl() + path + "?" + query))
+                    .header("X-Timestamp", String.valueOf(timestamp))
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
+                    .header("X-Signature", signature)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            return response != null ? response : objectMapper.createObjectNode();
+        } catch (RestClientResponseException e) {
+            log.error("네이버 API PUT 실패 {} -> {} {}", path, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BadRequestException("네이버 API 변경에 실패했습니다: " + e.getResponseBodyAsString());
+        }
+    }
+
+    private void delete(String path, String query) {
+        NaverCredentials cred = credentials();
+        long timestamp = System.currentTimeMillis();
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "DELETE", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
         try {
             restClient.delete()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .toBodilessEntity();
@@ -412,35 +507,37 @@ public class NaverSearchAdClient implements SearchAdClient {
     /** 리포트 다운로드 URL 은 별도 경로라 서명 경로를 그 URL 의 path 로 잡는다. */
     private String getRaw(String url) {
         URI uri = URI.create(url);
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "GET", uri.getPath());
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", uri.getPath());
         try {
             String body = RestClient.create().get()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .body(String.class);
             return body != null ? body : "";
         } catch (RestClientResponseException e) {
             log.error("리포트 다운로드 실패 {} {}", e.getStatusCode(), e.getResponseBodyAsString());
-            return "";
+            throw new IllegalStateException("리포트 다운로드에 실패했습니다: " + e.getStatusCode());
         }
     }
 
     private <T> T get(String path, String query, ParameterizedTypeReference<T> type) {
+        NaverCredentials cred = credentials();
         long timestamp = System.currentTimeMillis();
-        String signature = NaverSignature.sign(properties.secretKey(), timestamp, "GET", path);
+        String signature = NaverSignature.sign(cred.secretKey(), timestamp, "GET", path);
         URI uri = URI.create(properties.baseUrl() + path + (query.isEmpty() ? "" : "?" + query));
 
         try {
             T body = restClient.get()
                     .uri(uri)
                     .header("X-Timestamp", String.valueOf(timestamp))
-                    .header("X-API-KEY", properties.apiKey())
-                    .header("X-Customer", properties.customerId())
+                    .header("X-API-KEY", cred.apiKey())
+                    .header("X-Customer", cred.customerId())
                     .header("X-Signature", signature)
                     .retrieve()
                     .body(type);

@@ -206,6 +206,292 @@ export interface AdHealth {
   message: string
 }
 
+export type GoalType = 'CONVERSIONS' | 'BUDGET'
+
+export interface PlanRequest {
+  seedKeywords: string[]
+  goalType: GoalType
+  targetConversions: number | null
+  monthlyBudget: number | null
+  saleValue: number | null
+  assumedCvrPct: number | null
+  siteMonthlyVisitors: number | null
+  siteMonthlyConversions: number | null
+  targetRoasPct: number | null
+}
+
+export interface PlanKeyword {
+  keyword: string
+  monthlySearches: number
+  competition: string
+  suggestedBid: number
+  expectedClicks: number
+  expectedCost: number
+  selected: boolean
+  expectedImpressions: number
+  expectedCpc: number
+}
+
+export interface PlanBasis {
+  item: string
+  value: string
+  source: string
+  grade: string
+}
+
+export interface PlanScenario {
+  name: string
+  cvrPct: number
+  conversions: number
+  cpa: number
+  revenue: number | null
+  roasPct: number | null
+}
+
+export interface PlanProposal {
+  id: number
+  goalType: GoalType
+  seedKeywords: string[]
+  monthlyBudget: number
+  dailyBudget: number
+  expectedClicks: number
+  expectedConversions: number
+  targetCpa: number
+  cvrPct: number
+  cvrSource: string
+  scenarios: PlanScenario[]
+  keywords: PlanKeyword[]
+  assumptions: string[]
+  steps: string[]
+  warnings: string[]
+  createdAt: string
+  cvrLowPct: number
+  cvrHighPct: number
+  maxCpc: number | null
+  basis: PlanBasis[]
+}
+
+export interface HourOfDay {
+  hour: number
+  impCnt: number
+  clkCnt: number
+  salesAmt: number
+  ctr: number
+  cpc: number
+  avgRnk: number
+  convCnt: number
+  convAmt: number
+  cpa: number
+  roas: number
+}
+
+export interface MarketKeyword {
+  keyword: string
+  pcSearches: number
+  mobileSearches: number
+  totalSearches: number
+  mobileSharePct: number
+  monthlyClicks: number
+  competition: string
+  bidRank1: number | null
+  bidRank3: number | null
+  bidRank5: number | null
+  crowdRatio: number | null
+  relevant: boolean
+  opportunity: boolean
+}
+
+export interface MarketOverview {
+  seeds: string[]
+  seedSource: string
+  totalSearches: number
+  medianBidRank3: number
+  highCompetitionPct: number
+  mobileSharePct: number
+  keywords: MarketKeyword[]
+  insights: string[]
+}
+
+export interface SiteCheck {
+  reachable: boolean
+  title: string | null
+  description: string | null
+  naverTracking: boolean
+  googleAnalytics: boolean
+  hasForm: boolean
+  notes: string[]
+}
+
+export interface CompetitorReport {
+  sites: { url: string; mine: boolean; check: SiteCheck }[]
+  keywordCompetition: MarketKeyword[]
+  findings: string[]
+  limits: string[]
+}
+
+export interface OnboardingProfile {
+  companyName: string
+  homepageUrl: string
+  businessDescription: string
+  keywords: string[]
+  monthlyBudget: number
+  targetConversions: number
+  saleValue: number | null
+  siteMonthlyVisitors: number | null
+  siteMonthlyConversions: number | null
+}
+
+export interface OnboardingAlternative {
+  key: 'INCREASE' | 'REQUESTED' | 'DECREASE'
+  label: string
+  monthlyBudget: number
+  dailyBudget: number
+  expectedCost: number
+  expectedClicks: number
+  expectedConversions: number
+  conversionsLow: number
+  conversionsHigh: number
+  goalRatePct: number
+  costPerConversion: number
+  revenue: number | null
+  roasPct: number | null
+  extraCostPerExtraConversion: number | null
+  keywordCount: number
+  recommended: boolean
+  effect: string
+  plan: PlanProposal
+}
+
+export interface OnboardingProposal {
+  profile: OnboardingProfile
+  siteCheck: {
+    reachable: boolean
+    title: string | null
+    description: string | null
+    naverTracking: boolean
+    googleAnalytics: boolean
+    hasForm: boolean
+    notes: string[]
+  }
+  alternatives: OnboardingAlternative[]
+  recommendedKey: string
+  recommendation: string
+  warnings: string[]
+  selectedOption: string | null
+  createdAt: string
+}
+
+export interface KeywordEfficiency {
+  nccKeywordId: string
+  keyword: string
+  impressions: number
+  clicks: number
+  cost: number
+  conversions: number
+  revenue: number
+  cpa: number
+  roasPct: number
+  cvrPct: number
+  actualCpc: number
+  maxCpc: number
+  currentBid: number
+  suggestedBid: number
+  verdict: string
+  reason: string
+}
+
+export interface EfficiencyAnalysis {
+  since: string
+  until: string
+  mode: string
+  targetLabel: string
+  accountCvrPct: number
+  keywords: KeywordEfficiency[]
+}
+
+export interface AutopilotSettingsRequest {
+  enabled: boolean
+  targetCpa: number
+  targetRoasPct: number
+  monthlyBudgetCap: number
+  manageBids: boolean
+  manageBudget: boolean
+  pauseWasteful: boolean
+}
+
+export interface AutopilotSettings extends AutopilotSettingsRequest {
+  effectiveTargetCpa: number
+  effectiveMonthlyBudgetCap: number
+  targetSource: string
+  dryRun: boolean
+  maxChangeRatePct: number
+  maxDailyApplies: number
+  minBid: number
+  maxBid: number
+}
+
+export interface AutopilotAction {
+  type: string
+  target: string
+  before: string
+  after: string
+  reason: string
+  status: string
+}
+
+export interface AutopilotRun {
+  id: number
+  preview: boolean
+  dryRun: boolean
+  summary: string
+  actions: AutopilotAction[]
+  notes: string[]
+  ranAt: string
+}
+
+export type BriefingPeriod = 'DAILY' | 'WEEKLY' | 'MONTHLY'
+export type BriefingVerdict = 'INCREASE' | 'HOLD' | 'DECREASE' | 'NEED_DATA'
+
+export interface BriefingMetric {
+  label: string
+  current: number
+  previous: number
+  unit: string
+  changePct: number | null
+}
+
+export interface Briefing {
+  id: number
+  period: BriefingPeriod
+  since: string
+  until: string
+  headline: string
+  verdict: BriefingVerdict
+  verdictReason: string
+  currentDailyBudget: number
+  suggestedDailyBudget: number | null
+  metrics: BriefingMetric[]
+  pacing: {
+    monthlyBudget: number
+    spentSoFar: number
+    projectedSpend: number
+    targetConversions: number
+    conversionsSoFar: number
+    projectedConversions: number
+    comment: string
+  } | null
+  ctrComment: string
+  cvrComment: string
+  actions: { type: string; target: string; detail: string }[]
+  narrative: string[]
+  generatedBy: string
+  efficiencyBasis: string | null
+  efficiency: KeywordEfficiency[]
+  autopilotSummary: string | null
+  autopilotActions: AutopilotAction[]
+  createdAt: string
+}
+
 export interface KeywordIdea {
   keyword: string
   pcCount: number
@@ -293,4 +579,147 @@ export interface AdCampaign {
   status: string | null
   dailyBudget: number | null
   targetCpa: number | null
+}
+
+// ── 목표 상담 ─────────────────────────────────────────────────────
+export type RevenueModel = 'DIRECT' | 'COMMISSION' | 'SUBSCRIPTION'
+export type GoalKind = 'REVENUE' | 'PROFIT' | 'DEALS' | 'LEADS'
+/** USER(입력) · ASSUMED(가정) · MEASURED(실측) */
+export type ValueSource = 'USER' | 'ASSUMED' | 'MEASURED'
+
+export interface GoalOffering {
+  name: string
+  /** 계약 1건 매출. 수수료면 수수료, 정기 결제면 한 달 결제액 */
+  revenuePerDeal?: number
+  /** 계약 1건으로 실제로 남는 돈 */
+  profitPerDeal?: number
+  profitSource?: ValueSource
+}
+
+/** 대화로 파악한 사업 구조. 업종을 정해 두지 않는다. */
+export interface BusinessModel {
+  industry?: string
+  revenueModel?: RevenueModel
+  offerings: GoalOffering[]
+  leadToDealPct?: number
+  leadToDealSource?: ValueSource
+  leadToDealPriorPct?: number
+  dealsPerCustomer?: number
+  dealsPerCustomerSource?: ValueSource
+  goalType?: GoalKind
+  goalAmount?: number
+  adSharePct?: number
+  adShareSource?: ValueSource
+  /** 0 이면 상한 없음 */
+  budgetLimit?: number
+  seedKeywords: string[]
+}
+
+export interface EconomicsLine {
+  label: string
+  value: string
+  how: string
+  /** 입력 · 가정 · 실측 · 계산 */
+  grade: string
+}
+
+export interface GoalEconomicsResult {
+  revenuePerDeal: number
+  profitPerDeal: number
+  leadToDealPct: number
+  dealsPerCustomer: number
+  valuePerLead: number
+  breakEvenCpa: number
+  targetCpa: number
+  dealsNeeded: number
+  leadsNeeded: number
+  budgetAtTargetCpa: number
+  basis: EconomicsLine[]
+}
+
+export interface GoalOption {
+  /** GOAL(목표 달성) · LIMIT(예산 상한) · TRIAL(시험 운영) */
+  key: string
+  label: string
+  description: string
+  monthlyBudget: number
+  dailyBudget: number
+  expectedCost: number
+  expectedLeads: number
+  leadsLow: number
+  leadsHigh: number
+  expectedDeals: number
+  expectedRevenue: number
+  expectedProfit: number
+  expectedCpa: number
+  meetsGoal: boolean
+  goalRatePct: number
+  warnings: string[]
+  plan: PlanProposal | null
+  error: string | null
+}
+
+export interface GoalAnalysis {
+  economics: GoalEconomicsResult
+  options: GoalOption[]
+  recommended: string | null
+  recommendReason: string
+  notes: string[]
+  analyzedAt: string
+}
+
+export interface GoalMessage {
+  id: number
+  role: 'USER' | 'ASSISTANT'
+  content: string
+  createdAt: string
+}
+
+export interface GoalCheckin {
+  id: number
+  since: string
+  until: string
+  leads: number
+  /** NAVER(네이버 전환 수) · USER(직접 입력) */
+  leadsSource: string
+  deals: number
+  revenue: number | null
+  dealRatePct: number
+}
+
+export interface GoalView {
+  sessionId: number
+  /** INTERVIEW · ANALYZED · CONFIRMED */
+  status: string
+  model: BusinessModel
+  nextQuestion: string | null
+  economics: GoalEconomicsResult | null
+  analysis: GoalAnalysis | null
+  confirmedOption: string | null
+  confirmedAt: string | null
+  messages: GoalMessage[]
+  checkins: GoalCheckin[]
+  /** ai(모델 대화) · rule(정해진 질문) */
+  aiMode: string
+}
+
+export interface GoalCheckinRequest {
+  since: string
+  until: string
+  leads?: number
+  deals: number
+  revenue?: number
+}
+
+export interface GoalCheckinResult {
+  checkin: GoalCheckin
+  totalLeads: number
+  totalDeals: number
+  measuredPct: number
+  previousLeadToDealPct: number
+  leadToDealPct: number
+  appliedTargetCpa: number
+  suggestedTargetCpa: number
+  message: string
+  view: GoalView
 }

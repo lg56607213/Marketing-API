@@ -55,10 +55,14 @@ public class DataInitializer implements ApplicationRunner {
     private final SecretCipher secretCipher;
     private final PasswordEncoder passwordEncoder;
 
+    @org.springframework.beans.factory.annotation.Value("${app.admin-password:}")
+    private String configuredAdminPassword;
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
         Long companyId = ensureDefaultCompany();
+        applyConfiguredAdminPassword();
         adoptLegacyOwners(companyId);
         ensureDefaultAdAccount(companyId);
     }
@@ -72,13 +76,31 @@ public class DataInitializer implements ApplicationRunner {
 
         Company company = companyRepository.save(new Company(DEFAULT_COMPANY_NAME));
         if (admin == null) {
-            userRepository.save(new User(ADMIN_EMAIL, passwordEncoder.encode(ADMIN_PASSWORD),
+            String password = adminPasswordConfigured() ? configuredAdminPassword : ADMIN_PASSWORD;
+            userRepository.save(new User(ADMIN_EMAIL, passwordEncoder.encode(password),
                     UserRole.ADMIN, company.getId()));
             log.info("Default admin account created: {}", ADMIN_EMAIL);
         } else {
             admin.assignCompany(company.getId());
         }
         return company.getId();
+    }
+
+    /** 널리 알려진 기본 비밀번호로 만들어진 관리자 계정을 설정한 비밀번호로 맞춘다. */
+    private void applyConfiguredAdminPassword() {
+        if (!adminPasswordConfigured()) {
+            return;
+        }
+        userRepository.findByEmail(ADMIN_EMAIL).ifPresent(admin -> {
+            if (!passwordEncoder.matches(configuredAdminPassword, admin.getPassword())) {
+                admin.changePassword(passwordEncoder.encode(configuredAdminPassword));
+                log.info("관리자 계정의 비밀번호를 설정값으로 바꿨습니다.");
+            }
+        });
+    }
+
+    private boolean adminPasswordConfigured() {
+        return configuredAdminPassword != null && !configuredAdminPassword.isBlank();
     }
 
     private void adoptLegacyOwners(Long companyId) {

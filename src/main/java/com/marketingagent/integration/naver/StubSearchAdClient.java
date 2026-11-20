@@ -1,9 +1,13 @@
 package com.marketingagent.integration.naver;
 
+import com.marketingagent.integration.naver.dto.ConversionRow;
+import com.marketingagent.integration.naver.dto.HourlyStatRow;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
 import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
 import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import com.marketingagent.integration.naver.dto.ReportProbe;
 import com.marketingagent.integration.naver.dto.SearchQueryRow;
 import com.marketingagent.integration.naver.dto.StatRow;
 import java.time.LocalDate;
@@ -37,6 +41,10 @@ public class StubSearchAdClient implements SearchAdClient {
     /** Stub 에서 승인된 입찰가 변경을 기억해 화면에서 반영 결과를 확인할 수 있게 한다. */
     private final Map<String, Long> overriddenBids = new ConcurrentHashMap<>();
 
+    /** Stub 에서 바꾼 캠페인 일예산과 꺼 둔 키워드를 기억한다. */
+    private final Map<String, Long> overriddenBudgets = new ConcurrentHashMap<>();
+    private final java.util.Set<String> pausedKeywords = ConcurrentHashMap.newKeySet();
+
     /** Stub 에서 등록한 제외 키워드를 기억한다. */
     private final Map<String, List<RestrictedKeyword>> restricted = new ConcurrentHashMap<>();
 
@@ -47,8 +55,10 @@ public class StubSearchAdClient implements SearchAdClient {
     @Override
     public List<NccCampaign> listCampaigns() {
         return List.of(
-                new NccCampaign(campaignId, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE", 50000L, false),
-                new NccCampaign(campaignId2, "[Stub] 차량 관리 검색광고", "WEB_SITE", "ELIGIBLE", 30000L, false));
+                new NccCampaign(campaignId, "[Stub] 화물차 검색광고", "WEB_SITE", "ELIGIBLE",
+                        overriddenBudgets.getOrDefault(scoped(campaignId), 50000L), false),
+                new NccCampaign(campaignId2, "[Stub] 차량 관리 검색광고", "WEB_SITE", "ELIGIBLE",
+                        overriddenBudgets.getOrDefault(scoped(campaignId2), 30000L), false));
     }
 
     @Override
@@ -73,8 +83,9 @@ public class StubSearchAdClient implements SearchAdClient {
         List<NccKeyword> keywords = new ArrayList<>();
         for (int i = second ? half : 0; i < (second ? KEYWORDS.size() : half); i++) {
             keywords.add(new NccKeyword(
-                    keywordId(i), nccAdgroupId, KEYWORDS.get(i), "ELIGIBLE",
-                    overriddenBids.getOrDefault(keywordId(i), 500L + (i * 90L)), false, false));
+                    keywordId(i), nccAdgroupId, KEYWORDS.get(i),
+                    pausedKeywords.contains(scoped(keywordId(i))) ? "PAUSED" : "ELIGIBLE",
+                    overriddenBids.getOrDefault(scoped(keywordId(i)), 500L + (i * 90L)), false, false));
         }
         return keywords;
     }
@@ -100,9 +111,42 @@ public class StubSearchAdClient implements SearchAdClient {
         return result;
     }
 
+    /**
+     * 입찰가를 올릴수록 클릭이 늘되 점점 덜 늘고, 클릭 단가는 입찰가의 75% 로 잡은 가짜 예측.
+     * 실제 경매처럼 입찰가를 올릴수록 추가 클릭의 단가가 비싸진다.
+     */
+    @Override
+    public List<PerformanceEstimate> estimatePerformance(List<PerformanceEstimate.Query> queries, String device) {
+        List<PerformanceEstimate> result = new ArrayList<>();
+        for (PerformanceEstimate.Query q : queries) {
+            int seed = Math.abs(q.keyword().hashCode());
+            double maxClicks = 60 + seed % 400;
+            double half = 300 + seed % 900;
+            long clicks = Math.round(maxClicks * q.bid() / (q.bid() + half));
+            long cpc = Math.max(70, Math.round(q.bid() * 0.75));
+            result.add(new PerformanceEstimate(q.keyword(), q.bid(), clicks * 30, clicks, clicks * cpc));
+        }
+        return result;
+    }
+
+    @Override
+    public long updateCampaignDailyBudget(String nccCampaignId, long dailyBudget) {
+        overriddenBudgets.put(scoped(nccCampaignId), dailyBudget);
+        return dailyBudget;
+    }
+
+    @Override
+    public void setKeywordPaused(String nccKeywordId, String nccAdgroupId, boolean paused) {
+        if (paused) {
+            pausedKeywords.add(scoped(nccKeywordId));
+        } else {
+            pausedKeywords.remove(scoped(nccKeywordId));
+        }
+    }
+
     @Override
     public long updateKeywordBid(String nccKeywordId, String nccAdgroupId, String keyword, long bidAmt) {
-        overriddenBids.put(nccKeywordId, bidAmt);
+        overriddenBids.put(scoped(nccKeywordId), bidAmt);
         return bidAmt;
     }
 
@@ -135,6 +179,54 @@ public class StubSearchAdClient implements SearchAdClient {
         return rows;
     }
 
+    /** 오전 9시~오후 10시에 노출이 몰리는 가짜 시간대별 성과. */
+    @Override
+    public List<HourlyStatRow> hourlyStatReport(LocalDate date) {
+        List<HourlyStatRow> rows = new ArrayList<>();
+        for (int i = 0; i < KEYWORDS.size(); i++) {
+            for (int hour = 0; hour < 24; hour++) {
+                for (String device : List.of("P", "M")) {
+                    int seed = Math.abs((keywordId(i) + date + hour + device).hashCode());
+                    boolean busy = hour >= 9 && hour <= 22;
+                    long imp = (busy ? 20 : 2) + seed % (busy ? 40 : 6);
+                    long clk = imp * (1 + seed % 6) / 100 + (seed % 7 == 0 ? 1 : 0);
+                    long cost = clk * (400 + seed % 700);
+                    long rnkSum = imp * (10 + seed % 40) / 10;
+                    rows.add(new HourlyStatRow(date, hour, campaignOf(i), adgroupOf(i), keywordId(i), device,
+                            imp, clk, cost, rnkSum));
+                }
+            }
+        }
+        return rows;
+    }
+
+    /** 짝수 번째 키워드만 전환이 나게 해서 비용만 쓰는 키워드가 드러나게 한다. */
+    @Override
+    public List<ConversionRow> conversionReport(LocalDate date) {
+        List<ConversionRow> rows = new ArrayList<>();
+        for (int i = 0; i < KEYWORDS.size(); i += 2) {
+            for (int hour = 9; hour <= 22; hour++) {
+                int seed = Math.abs((keywordId(i) + date + hour).hashCode());
+                if (seed % 4 != 0) {
+                    continue;
+                }
+                String device = seed % 3 == 0 ? "P" : "M";
+                rows.add(new ConversionRow(date, hour, campaignOf(i), adgroupOf(i), keywordId(i), device,
+                        1, "lead", 1, 0));
+                if (seed % 8 == 0) {
+                    rows.add(new ConversionRow(date, hour, campaignOf(i), adgroupOf(i), keywordId(i), device,
+                            2, "purchase", 1, 30000L + seed % 70000));
+                }
+            }
+        }
+        return rows;
+    }
+
+    @Override
+    public ReportProbe probeReport(String reportTp, LocalDate date) {
+        return new ReportProbe(1, StatReportParser.expectedColumns(reportTp));
+    }
+
     @Override
     public List<NccKeyword> createKeywords(String nccAdgroupId, List<NewKeyword> keywords) {
         List<NccKeyword> created = new ArrayList<>();
@@ -148,12 +240,12 @@ public class StubSearchAdClient implements SearchAdClient {
 
     @Override
     public void deleteKeyword(String nccKeywordId) {
-        overriddenBids.remove(nccKeywordId);
+        overriddenBids.remove(scoped(nccKeywordId));
     }
 
     @Override
     public List<RestrictedKeyword> listRestrictedKeywords(String nccAdgroupId) {
-        return List.copyOf(restricted.getOrDefault(nccAdgroupId, List.of()));
+        return List.copyOf(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
     }
 
     @Override
@@ -162,17 +254,17 @@ public class StubSearchAdClient implements SearchAdClient {
         for (String keyword : keywords) {
             added.add(new RestrictedKeyword("rst-stub-" + Math.abs(keyword.hashCode()), keyword, type));
         }
-        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
         all.addAll(added);
-        restricted.put(nccAdgroupId, all);
+        restricted.put(scoped(nccAdgroupId), all);
         return added;
     }
 
     @Override
     public void deleteRestrictedKeyword(String nccAdgroupId, String restrictedKeywordId) {
-        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(nccAdgroupId, List.of()));
+        List<RestrictedKeyword> all = new ArrayList<>(restricted.getOrDefault(scoped(nccAdgroupId), List.of()));
         all.removeIf(r -> r.id().equals(restrictedKeywordId));
-        restricted.put(nccAdgroupId, all);
+        restricted.put(scoped(nccAdgroupId), all);
     }
 
     private StatRow statRow(String id, LocalDate date) {
@@ -185,6 +277,24 @@ public class StubSearchAdClient implements SearchAdClient {
         double avgRnk = round2(1.0 + (seed % 60) / 10.0);
         long ccnt = clkCnt / 10;
         return new StatRow(id, date, impCnt, clkCnt, salesAmt, ctr, cpc, avgRnk, ccnt);
+    }
+
+    /** 인스턴스가 계정마다 따로 있어서 기억해 둔 값이 계정끼리 섞이지 않는다. */
+    private String scoped(String id) {
+        return id;
+    }
+
+    /** 키워드 앞쪽 절반은 첫 캠페인, 나머지는 둘째 캠페인에 속한다. */
+    private boolean inSecondCampaign(int index) {
+        return index >= KEYWORDS.size() / 2;
+    }
+
+    private String campaignOf(int index) {
+        return inSecondCampaign(index) ? campaignId2 : campaignId;
+    }
+
+    private String adgroupOf(int index) {
+        return inSecondCampaign(index) ? adgroupId2 : adgroupId;
     }
 
     private String keywordId(int index) {

@@ -22,10 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 입찰가 조정 추천을 만들고, 사용자가 승인한 건만 네이버에 반영한다.
+ * 입찰가 조정 추천을 만들고, 승인된 건만 네이버에 반영한다.
  *
- * <p>설계 원칙: 자동 반영은 없다. 추천 생성과 반영은 완전히 분리되어 있으며,
- * 반영은 반드시 {@link #approve} 를 통해서만 일어난다.
+ * <p>설계 원칙: 추천 생성과 반영은 완전히 분리되어 있으며, 반영은 반드시 {@link #approve} 를 통해서만 일어난다.
+ * 승인하는 쪽은 사용자이거나, 계정에서 켜 둔 자동 운영이다. 어느 쪽이든 같은 가드레일을 거친다.
  *
  * <p>평가 기준은 캠페인마다 따로 잡는다. 한 계정에 전환 단가가 다른 사이트가 섞여 있어도
  * 캠페인만 나눠 두면 각자의 목표 CPA 와 평균 CTR 로 판단한다.

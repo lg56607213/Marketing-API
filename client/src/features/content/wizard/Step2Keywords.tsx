@@ -2,24 +2,9 @@ import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Plus, X } from 'lucide-react'
-
-const KEYWORD_MAP: Record<string, string[]> = {
-  default: ['마케팅 전략', '브랜드 인지도', '타겟 오디언스', '콘텐츠 플랜', '투자수익률', '참여도', '전환율'],
-  '대출': ['저금리', '빠른 승인', '무담보', '유연한 조건', '신용 점수', '월 납입금', '사전 승인'],
-  '모기지': ['주택 담보 대출', '고정 금리', '변동 금리', '계약금', '부동산 가치', '재융자', '상환 일정'],
-  '금융': ['투자', '포트폴리오', '리스크 관리', '복리', '재무 계획', '분산 투자', '수익률'],
-  '부동산': ['부동산 투자', '시장 동향', '집값', '임대 수익', '입지 분석', '자본 이익', '재산세'],
-  '보험': ['보장 범위', '보험료', '약관', '보험금 청구', '공제액', '수익자', '리스크 평가'],
-}
-
-function suggestKeywords(topic: string): string[] {
-  const lower = topic.toLowerCase()
-  for (const [key, kws] of Object.entries(KEYWORD_MAP)) {
-    if (key !== 'default' && lower.includes(key)) return kws
-  }
-  return KEYWORD_MAP.default
-}
+import { Loader2, Plus, X } from 'lucide-react'
+import { marketApi } from '@/services/api'
+import type { MarketKeyword } from '@/types'
 
 interface Props {
   topic: string
@@ -27,12 +12,29 @@ interface Props {
   onChange: (kws: string[]) => void
 }
 
+/** 주제와 함께 실제로 검색되는 연관 키워드를 네이버에서 받아 고르게 한다. 받지 못하면 직접 입력만 남긴다. */
 export function Step2Keywords({ topic, keywords, onChange }: Props) {
-  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<MarketKeyword[]>([])
+  const [loading, setLoading] = useState(true)
   const [custom, setCustom] = useState('')
 
   useEffect(() => {
-    setSuggestions(suggestKeywords(topic))
+    let cancelled = false
+    setLoading(true)
+    marketApi
+      .keywords(topic)
+      .then((market) => {
+        if (!cancelled) setSuggestions(market.keywords.slice(0, 12))
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestions([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [topic])
 
   const toggle = (kw: string) => {
@@ -50,27 +52,42 @@ export function Step2Keywords({ topic, keywords, onChange }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-muted-foreground mb-3">
-          <span className="font-medium text-foreground">"{topic}"</span>에 대한 AI 추천 키워드입니다. 포함할 키워드를 선택하세요.
+        <p className="mb-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">"{topic}"</span>와 함께 실제로 검색되는 말입니다. 글에 넣을 키워드를 고르세요.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {suggestions.map((kw) => {
-            const selected = keywords.includes(kw)
-            return (
-              <button
-                key={kw}
-                onClick={() => toggle(kw)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                  selected
-                    ? 'bg-indigo-500 text-white border-indigo-500'
-                    : 'bg-background border-border hover:border-indigo-400 text-foreground'
-                }`}
-              >
-                {kw}
-              </button>
-            )
-          })}
-        </div>
+        {loading ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> 연관 키워드를 가져오는 중
+          </p>
+        ) : suggestions.length === 0 ? (
+          <p className="rounded-md border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+            이 주제의 연관 키워드를 가져오지 못했습니다. 아래에 직접 입력하세요. 주제를 더 짧고 일반적인 말로 바꾸면 나올 수 있습니다.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s) => {
+              const selected = keywords.includes(s.keyword)
+              return (
+                <button
+                  key={s.keyword}
+                  onClick={() => toggle(s.keyword)}
+                  title={`월 ${s.totalSearches.toLocaleString()}회 검색 · 경쟁 ${s.competition}`}
+                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                    selected
+                      ? 'border-indigo-500 bg-indigo-500 text-white'
+                      : 'border-border bg-background text-foreground hover:border-indigo-400'
+                  }`}
+                >
+                  {s.keyword}
+                  <span className={`ml-1.5 text-[10px] ${selected ? 'text-indigo-100' : 'text-muted-foreground'}`}>
+                    {s.totalSearches.toLocaleString()}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {suggestions.length > 0 && <p className="mt-2 text-[10px] text-muted-foreground">숫자는 네이버의 최근 한 달 검색수입니다.</p>}
       </div>
 
       <div className="space-y-2">

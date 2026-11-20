@@ -1,6 +1,15 @@
 import axios from 'axios'
 import type {
   ApiResponse,
+  CompetitorReport,
+  HourOfDay,
+  MarketOverview,
+  OnboardingProfile,
+  OnboardingProposal,
+  AutopilotRun,
+  AutopilotSettings,
+  AutopilotSettingsRequest,
+  EfficiencyAnalysis,
   AuthResponse,
   BrandRequest,
   BrandResponse,
@@ -14,6 +23,10 @@ import type {
   BidApplyResult,
   AdReport,
   AdHealth,
+  PlanProposal,
+  PlanRequest,
+  Briefing,
+  BriefingPeriod,
   KeywordIdea,
   SearchQueryPerformance,
   SearchQuerySyncResult,
@@ -24,6 +37,10 @@ import type {
   AdAccount,
   AdAccountRequest,
   AdCampaign,
+  BusinessModel,
+  GoalView,
+  GoalCheckinRequest,
+  GoalCheckinResult,
 } from '@/types'
 import { useAdScopeStore } from '@/store/adScopeStore'
 
@@ -226,6 +243,65 @@ export const searchQueryApi = {
         params: { ...scope(), since, until },
       })
       .then(unwrap),
+}
+
+// 운영 계획 · 일간/주간 브리핑
+export const plannerApi = {
+  propose: (request: PlanRequest) =>
+    http.post<ApiResponse<PlanProposal>>('/ads/plans/propose', request, { params: account() }).then(unwrap),
+  currentPlan: () => http.get<ApiResponse<PlanProposal | null>>('/ads/plans/current', { params: account() }).then(unwrap),
+  generateBriefing: (period: BriefingPeriod) =>
+    http.post<ApiResponse<Briefing>>('/ads/briefings', null, { params: { ...account(), period } }).then(unwrap),
+  briefings: () => http.get<ApiResponse<Briefing[]>>('/ads/briefings', { params: account() }).then(unwrap),
+}
+
+// 시장(키워드 수요·경쟁) · 경쟁사 비교
+export const marketApi = {
+  keywords: (seeds?: string) =>
+    http.get<ApiResponse<MarketOverview>>('/market/keywords', { params: { ...account(), seeds } }).then(unwrap),
+  competitors: (urls: string[]) =>
+    http.post<ApiResponse<CompetitorReport>>('/market/competitors', { urls }, { params: account() }).then(unwrap),
+  hourly: (since?: string, until?: string) =>
+    http.get<ApiResponse<HourOfDay[]>>('/ads/stat-reports/hourly', { params: { ...account(), since, until } }).then(unwrap),
+}
+
+// 업체 정보 등록 · 예산 3안 제안
+export const onboardingApi = {
+  current: () => http.get<ApiResponse<OnboardingProposal | null>>('/onboarding', { params: account() }).then(unwrap),
+  submit: (profile: OnboardingProfile) =>
+    http.post<ApiResponse<OnboardingProposal>>('/onboarding', profile, { params: account() }).then(unwrap),
+  select: (option: string) =>
+    http.post<ApiResponse<OnboardingProposal>>('/onboarding/select', null, { params: { ...account(), option } }).then(unwrap),
+}
+
+// 자동 운영 · 광고비 대비 효율
+export const autopilotApi = {
+  settings: () => http.get<ApiResponse<AutopilotSettings>>('/ads/autopilot', { params: account() }).then(unwrap),
+  update: (request: AutopilotSettingsRequest) =>
+    http.put<ApiResponse<AutopilotSettings>>('/ads/autopilot', request, { params: account() }).then(unwrap),
+  run: (preview: boolean) =>
+    http.post<ApiResponse<AutopilotRun>>('/ads/autopilot/run', null, { params: { ...account(), preview } }).then(unwrap),
+  runs: () => http.get<ApiResponse<AutopilotRun[]>>('/ads/autopilot/runs', { params: account() }).then(unwrap),
+  efficiency: () => http.get<ApiResponse<EfficiencyAnalysis>>('/ads/efficiency', { params: account() }).then(unwrap),
+}
+
+// 목표 상담: 대화로 사업 구조를 파악하고 목표 CPA·예산을 정한다
+export const goalApi = {
+  current: () => http.get<ApiResponse<GoalView | null>>('/goals', { params: account() }).then(unwrap),
+  start: () => http.post<ApiResponse<GoalView>>('/goals/start', null, { params: account() }).then(unwrap),
+  send: (text: string) =>
+    http.post<ApiResponse<GoalView>>('/goals/messages', { text }, { params: account() }).then(unwrap),
+  updateModel: (model: BusinessModel) =>
+    http.put<ApiResponse<GoalView>>('/goals/model', model, { params: account() }).then(unwrap),
+  analyze: () => http.post<ApiResponse<GoalView>>('/goals/analyze', null, { params: account() }).then(unwrap),
+  confirm: (option: string, enableAutopilot: boolean) =>
+    http
+      .post<ApiResponse<GoalView>>('/goals/confirm', { option, enableAutopilot }, { params: account() })
+      .then(unwrap),
+  checkin: (request: GoalCheckinRequest) =>
+    http.post<ApiResponse<GoalCheckinResult>>('/goals/checkins', request, { params: account() }).then(unwrap),
+  applyTarget: () =>
+    http.post<ApiResponse<GoalView>>('/goals/target/apply', null, { params: account() }).then(unwrap),
 }
 
 // 자연검색 (SEO)

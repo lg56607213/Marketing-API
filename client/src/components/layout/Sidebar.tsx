@@ -1,8 +1,14 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, FolderOpen, Wand2, BarChart3, History,
-  ImageIcon, Settings, Building2, Users, LogOut, Zap,
-  TrendingUp, Radio, Globe, MousePointerClick, Gavel, FileBarChart, Lightbulb, ListFilter, Globe2, KeyRound } from 'lucide-react'
+  Settings, Building2, Users, LogOut, Zap,
+  TrendingUp, Globe, MousePointerClick, Gavel, FileBarChart, Lightbulb, ListFilter, Globe2,
+  Target,
+  ClipboardList,
+  Bot,
+  KeyRound,
+  MessageSquare,
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -16,9 +22,13 @@ const topNavItems = [
 ]
 
 const analyticsItems = [
+  { to: '/goals', icon: MessageSquare, label: '목표 상담', exact: false },
   { to: '/analytics', icon: BarChart3, label: '개요', exact: true },
-  { to: '/analytics/market', icon: TrendingUp, label: '마켓 인텔리전스', exact: false },
-  { to: '/analytics/channels', icon: Radio, label: '채널 애널리틱스', exact: false },
+  { to: '/analytics/market', icon: TrendingUp, label: '시장 · 키워드 수요', exact: false },
+  { to: '/onboarding', icon: Building2, label: '업체 정보 · 광고 제안', exact: false },
+  { to: '/analytics/plan', icon: Target, label: '운영 계획', exact: false },
+  { to: '/analytics/briefings', icon: ClipboardList, label: '운영 브리핑', exact: false },
+  { to: '/analytics/autopilot', icon: Bot, label: '자동 운영', exact: false },
   { to: '/analytics/ads', icon: MousePointerClick, label: '검색광고 성과', exact: false },
   { to: '/analytics/bids', icon: Gavel, label: '입찰가 조정', exact: false },
   { to: '/analytics/ad-report', icon: FileBarChart, label: 'AI 광고 리포트', exact: false },
@@ -31,7 +41,6 @@ const analyticsItems = [
 
 const bottomNavItems = [
   { to: '/history', icon: History, label: 'AI 히스토리' },
-  { to: '/images', icon: ImageIcon, label: '이미지 라이브러리' },
   { to: '/settings', icon: Settings, label: '설정' },
 ]
 

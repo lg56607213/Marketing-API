@@ -11,6 +11,8 @@ public interface BidRecommendationRepository extends JpaRepository<BidRecommenda
     List<BidRecommendation> findByAdAccountIdAndStatusOrderByIdDesc(Long adAccountId, BidStatus status);
     List<BidRecommendation> findByAdAccountIdAndStatusInOrderByIdDesc(Long adAccountId, List<BidStatus> statuses);
     long countByAdAccountIdAndStatusAndDecidedAtAfter(Long adAccountId, BidStatus status, LocalDateTime after);
+    List<BidRecommendation> findByAdAccountIdAndStatusAndDecidedAtAfter(Long adAccountId, BidStatus status,
+            LocalDateTime after);
 
     @Modifying
     @Query("delete from BidRecommendation x where x.adAccountId = :accountId")

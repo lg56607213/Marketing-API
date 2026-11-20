@@ -17,14 +17,22 @@ spring:
     enabled: ${FLYWAY_ENABLED:false}
   h2:
     console:
-      enabled: true
+      # 외부에 공개할 때는 반드시 false. DB 를 통째로 열어 주는 화면이다
+      enabled: ${H2_CONSOLE_ENABLED:true}
       path: /h2-console
+  web:
+    resources:
+      # 빌드한 화면(client/dist)을 서버가 같은 포트로 함께 내보낸다. 폴더가 없으면 API 만 동작한다
+      static-locations: ${APP_WEB_DIR:file:./client/dist/}
 
 server:
   port: ${SERVER_PORT:8080}
 
 springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
   swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
     path: /swagger-ui.html
   info:
     title: AI Marketing Agent API
@@ -36,7 +44,16 @@ jwt:
 
 app:
   # DB에 저장하는 광고 API 비밀키를 암호화하는 키. 운영에서는 반드시 바꾸고, 바꾼 뒤에는 유지한다.
-  encryption-key: ${APP_ENCRYPTION_KEY:${jwt.secret}}
+  # 예전 이름(CREDENTIAL_ENCRYPTION_KEY)으로 둔 값도 읽는다.
+  encryption-key: ${APP_ENCRYPTION_KEY:${CREDENTIAL_ENCRYPTION_KEY:${jwt.secret}}}
+  # true 면 외부 공개용으로 본다. 기본 비밀값이 하나라도 남아 있으면 서버가 뜨지 않는다
+  public-mode: ${APP_PUBLIC_MODE:false}
+  # false 면 새 회원가입을 받지 않는다
+  signup-enabled: ${APP_SIGNUP_ENABLED:true}
+  # 값이 있으면 기본 관리자(admin@marketing.local)의 비밀번호를 이 값으로 맞춘다
+  admin-password: ${ADMIN_PASSWORD:}
+  # 공개 모드에서 12자 미만의 관리자 비밀번호를 허용한다. 위험을 알고 쓸 때만
+  allow-weak-admin-password: ${APP_ALLOW_WEAK_ADMIN_PASSWORD:false}
 
 ai:
   provider: ${AI_PROVIDER:stub}
@@ -55,6 +72,8 @@ naver:
     sync-enabled: ${NAVER_SYNC_ENABLED:false}
     sync-cron: ${NAVER_SYNC_CRON:0 30 5 * * *}
     sync-days: ${NAVER_SYNC_DAYS:30}
+    # 시간대별 성과·전환·검색어 리포트를 매일 다시 받을 일수 (간접전환이 뒤늦게 잡힘)
+    report-sync-days: ${NAVER_REPORT_SYNC_DAYS:7}
 
 ads:
   bid:

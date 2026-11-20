@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Shield, Zap, Database } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Shield, Zap, Database, KeyRound } from 'lucide-react'
 
 export function SettingsPage() {
   const { displayId, email, role } = useAuthStore()
@@ -15,7 +16,7 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>계정</CardTitle>
-          <CardDescription>관리자가 관리하는 계정 정보입니다.</CardDescription>
+          <CardDescription>로그인한 계정 정보입니다.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
@@ -34,6 +35,21 @@ export function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             비밀번호나 계정 정보 변경은 관리자에게 문의하세요.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* 네이버 검색광고 계정은 업체마다 여러 개를 등록할 수 있어 별도 화면에서 관리한다 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4" /> 네이버 검색광고 계정
+          </CardTitle>
+          <CardDescription>회사마다, 광고 계정마다 API 키를 따로 등록합니다.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link to="/analytics/accounts" className="text-sm font-medium text-indigo-600 hover:underline">
+            광고 계정 관리로 이동 →
+          </Link>
         </CardContent>
       </Card>
 

@@ -56,6 +56,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.of(false, errors, "Validation failed"));
     }
 
+    /** 없는 주소나 없는 파일. 서버 오류가 아니므로 404 로 답하고 오류 로그를 남기지 않는다. */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> notFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.fail("Not found"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> internalError(Exception exception) {
         log.error("Unhandled exception", exception);
