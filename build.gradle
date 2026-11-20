@@ -16,6 +16,8 @@ java {
 ext {
     mapstructVersion = '1.6.3'
     jjwtVersion = '0.12.6'
+    // 테스트 전용. Boot 3.3.5 기본값(1.19.8)은 Docker API 1.32 로 접속해 Docker Engine 29 이상에서 거부된다.
+    set('testcontainers.version', '1.21.4')
 }
 
 dependencies {
@@ -48,9 +50,30 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// 기본 테스트는 H2 로 돈다. Docker 가 필요한 MySQL 검증은 mysqlTest 로 따로 돌린다.
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'mysql'
+    }
+}
+
+// MySQL(Testcontainers) 로 Flyway 마이그레이션, Hibernate validate, 핵심 흐름을 확인한다. Docker 가 켜져 있어야 한다.
+// 다른 버전은 ./gradlew mysqlTest -PmysqlImage=mysql:8.4.6 처럼 지정한다.
+tasks.register('mysqlTest', Test) {
+    description = 'MySQL(Testcontainers) 로 마이그레이션과 핵심 흐름을 검증한다.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'mysql'
+    }
+    systemProperty 'mysql.image', (findProperty('mysqlImage') ?: 'mysql:8.0.46')
+    systemProperty 'mysql.ddl-auto', (findProperty('mysqlDdlAuto') ?: 'validate')
+    shouldRunAfter tasks.named('test')
 }

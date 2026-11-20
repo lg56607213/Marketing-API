@@ -35,9 +35,9 @@ public class GoalSession extends BaseEntity {
     @Column(name = "model_json", nullable = false, columnDefinition = "TEXT")
     private String modelJson;
 
-    /** 마지막 검토 결과(GoalDtos.Analysis)를 JSON 으로. 검토 전이면 null */
+    /** 마지막 검토 결과(GoalDtos.Analysis)를 JSON 으로. 검토 전이면 null. 키워드가 많으면 64KB 를 넘을 수 있어 V11 과 같게 MEDIUMTEXT */
     @Lob
-    @Column(name = "analysis_json", columnDefinition = "TEXT")
+    @Column(name = "analysis_json", columnDefinition = "MEDIUMTEXT")
     private String analysisJson;
 
     @Column(name = "confirmed_option", length = 20)

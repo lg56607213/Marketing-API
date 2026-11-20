@@ -59,9 +59,9 @@ public class BusinessProfile extends BaseEntity {
     @Column(name = "site_monthly_conversions")
     private Long siteMonthlyConversions;
 
-    /** 마지막 제안 전체(OnboardingDtos.Proposal)를 JSON 으로 보관한다. */
+    /** 마지막 제안 전체(OnboardingDtos.Proposal)를 JSON 으로 보관한다. V10 과 같게 MEDIUMTEXT */
     @Lob
-    @Column(name = "proposal_json", columnDefinition = "TEXT")
+    @Column(name = "proposal_json", columnDefinition = "MEDIUMTEXT")
     private String proposalJson;
 
     /** 회원이 고른 안(INCREASE / REQUESTED / DECREASE). 아직 고르지 않았으면 null */
