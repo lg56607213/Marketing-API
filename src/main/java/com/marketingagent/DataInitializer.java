@@ -62,6 +62,7 @@ public class DataInitializer implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         Long companyId = ensureDefaultCompany();
+        ensureSuperAdmin();
         applyConfiguredAdminPassword();
         adoptLegacyOwners(companyId);
         ensureDefaultAdAccount(companyId);
@@ -84,6 +85,19 @@ public class DataInitializer implements ApplicationRunner {
             admin.assignCompany(company.getId());
         }
         return company.getId();
+    }
+
+    /** 기본 관리자(admin)를 최고 관리자로 지정한다. 가입 승인 화면은 최고 관리자만 쓴다. */
+    private void ensureSuperAdmin() {
+        userRepository.findByEmail(ADMIN_EMAIL).ifPresent(admin -> {
+            if (!admin.isSuperAdmin()) {
+                admin.grantSuperAdmin();
+                log.info("{} 를 최고 관리자로 지정했습니다.", ADMIN_EMAIL);
+            }
+            if (!admin.isActive()) {
+                admin.approve();
+            }
+        });
     }
 
     /** 널리 알려진 기본 비밀번호로 만들어진 관리자 계정을 설정한 비밀번호로 맞춘다. */

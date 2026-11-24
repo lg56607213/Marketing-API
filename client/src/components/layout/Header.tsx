@@ -22,6 +22,7 @@ const pageTitles: Record<string, string> = {
   '/settings': '설정',
   '/admin/companies': '기업 관리',
   '/admin/users': '사용자 관리',
+  '/admin/signups': '가입 승인',
 }
 
 export function Header() {

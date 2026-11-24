@@ -26,3 +26,10 @@ export function AdminRoute() {
   if (role !== 'ADMIN') return <Navigate to="/dashboard" replace />
   return <Outlet />
 }
+
+/** 최고 관리자(admin) 전용 화면 */
+export function SuperAdminRoute() {
+  const { superAdmin } = useAuthStore()
+  if (!superAdmin) return <Navigate to="/dashboard" replace />
+  return <Outlet />
+}

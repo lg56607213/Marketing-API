@@ -8,6 +8,7 @@ import {
   Bot,
   KeyRound,
   MessageSquare,
+  UserCheck,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -58,7 +59,7 @@ const NAV_CLS = (isActive: boolean) =>
   )
 
 export function Sidebar() {
-  const { displayId, role, companyName, logout } = useAuthStore()
+  const { displayId, role, superAdmin, companyName, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -154,6 +155,12 @@ export function Sidebar() {
                 {label}
               </NavLink>
             ))}
+            {superAdmin && (
+              <NavLink to="/admin/signups" className={({ isActive }) => NAV_CLS(isActive)}>
+                <UserCheck className="h-4 w-4 shrink-0" />
+                가입 승인
+              </NavLink>
+            )}
           </>
         )}
       </nav>
@@ -168,7 +175,7 @@ export function Sidebar() {
           </Avatar>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-200">{displayId}</p>
-            <p className="text-[10px] text-slate-500">{companyName ? `${companyName} · ` : ''}{role === 'ADMIN' ? '관리자' : '사용자'}</p>
+            <p className="text-[10px] text-slate-500">{companyName ? `${companyName} · ` : ''}{superAdmin ? '최고 관리자' : role === 'ADMIN' ? '관리자' : '사용자'}</p>
           </div>
         </div>
         <Button

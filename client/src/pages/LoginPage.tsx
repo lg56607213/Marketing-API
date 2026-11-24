@@ -4,7 +4,7 @@ import { Zap, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { authApi } from '@/services/api'
+import { authApi, apiMessage } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { toApiEmail } from '@/types'
 
@@ -24,6 +24,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const isSignup = mode === 'signup'
   const { login } = useAuthStore()
@@ -41,16 +42,30 @@ export function LoginPage() {
       if (password.length < 8) { setError('비밀번호는 8자 이상이어야 합니다.'); return }
     }
     setError('')
+    setNotice('')
     setLoading(true)
     try {
       const auth = isSignup
         ? await authApi.register(toApiEmail(loginId), password, companyName.trim())
         : await authApi.login(toApiEmail(loginId), password)
+      if (auth.status === 'PENDING' || !auth.token) {
+        // 운영 서버는 관리자 승인 후에 쓸 수 있다. 로그인 화면으로 돌려보내고 안내한다.
+        setMode('login')
+        setPassword('')
+        setNotice('가입 신청이 접수되었습니다. 관리자가 승인하면 같은 아이디로 로그인할 수 있습니다.')
+        return
+      }
       login(auth)
       // 가입 직후에는 네이버 광고 계정부터 연결한다. 연결해야 목표 상담과 분석을 할 수 있다.
       navigate(isSignup ? '/analytics/accounts' : '/dashboard')
     } catch (err) {
-      setError(isSignup ? signupError(err) : LOGIN_ERROR)
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (!isSignup && status === 403) {
+        // 승인 대기·이용 중지: 서버가 알려 주는 이유를 그대로 보여 준다
+        setError(apiMessage(err, '아직 이용할 수 없는 계정입니다. 관리자에게 문의하세요.'))
+      } else {
+        setError(isSignup ? signupError(err) : LOGIN_ERROR)
+      }
     } finally {
       setLoading(false)
     }
@@ -154,6 +169,9 @@ export function LoginPage() {
               </div>
             </div>
 
+            {notice && (
+              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>
+            )}
             {error && (
               <p className="text-sm text-destructive">{error}</p>
             )}
@@ -169,7 +187,7 @@ export function LoginPage() {
             <button
               type="button"
               className="font-medium text-indigo-600 hover:underline"
-              onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError('') }}
+              onClick={() => { setMode(isSignup ? 'login' : 'signup'); setError(''); setNotice('') }}
             >
               {isSignup ? '로그인' : '업체 회원가입'}
             </button>

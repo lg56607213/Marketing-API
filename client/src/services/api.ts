@@ -16,6 +16,7 @@ import type {
   ContentResponse,
   GenerateRequest,
   UserSummary,
+  SignupSummary,
   AdSummary,
   KeywordPerformance,
   AdSyncResult,
@@ -128,6 +129,16 @@ export const adminApi = {
   listUsers: () => http.get<ApiResponse<UserSummary[]>>('/admin/users').then(unwrap),
   createUser: (email: string, password: string) =>
     http.post<ApiResponse<UserSummary>>('/admin/users', { email, password }).then(unwrap),
+}
+
+// 최고 관리자: 모든 업체의 가입 승인
+export const superAdminApi = {
+  listSignups: () => http.get<ApiResponse<SignupSummary[]>>('/super-admin/signups').then(unwrap),
+  approve: (userId: number) =>
+    http.post<ApiResponse<SignupSummary>>(`/super-admin/signups/${userId}/approve`).then(unwrap),
+  /** 가입 거절. 이용 중인 계정이면 이용 중지 */
+  reject: (userId: number) =>
+    http.post<ApiResponse<SignupSummary>>(`/super-admin/signups/${userId}/reject`).then(unwrap),
 }
 
 // 광고 계정 (업체가 등록한 네이버 검색광고 계정)

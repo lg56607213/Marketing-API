@@ -5,12 +5,28 @@ export interface ApiResponse<T> {
   timestamp: string
 }
 
+export type UserStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
+
 export interface AuthResponse {
-  token: string
+  /** 승인 대기(PENDING)로 가입한 경우 null. 승인 후 로그인하면 받는다 */
+  token: string | null
   email: string
   role: 'USER' | 'ADMIN'
   companyId: number | null
   companyName: string | null
+  status: UserStatus
+  /** 모든 업체의 가입 신청을 승인하는 최고 관리자 */
+  superAdmin: boolean
+}
+
+/** 최고 관리자 가입 승인 화면의 한 줄 */
+export interface SignupSummary {
+  id: number
+  email: string
+  companyName: string | null
+  role: 'USER' | 'ADMIN'
+  status: UserStatus
+  createdAt: string | null
 }
 
 export interface UserSummary {

@@ -9,4 +9,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     List<User> findByCompanyIdOrderByIdAsc(Long companyId);
     List<User> findByCompanyIdIsNull();
+    List<User> findBySuperAdminFalseOrderByIdDesc();
 }

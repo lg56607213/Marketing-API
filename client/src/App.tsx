@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AppLayout, AdminRoute } from '@/components/layout/AppLayout'
+import { AppLayout, AdminRoute, SuperAdminRoute } from '@/components/layout/AppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ProjectsPage } from '@/pages/ProjectsPage'
@@ -25,6 +25,7 @@ import { ImageLibraryPage } from '@/pages/ImageLibraryPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { CompanyManagementPage } from '@/pages/admin/CompanyManagementPage'
 import { UserManagementPage } from '@/pages/admin/UserManagementPage'
+import { SignupApprovalPage } from '@/pages/admin/SignupApprovalPage'
 
 export default function App() {
   return (
@@ -59,6 +60,9 @@ export default function App() {
           <Route element={<AdminRoute />}>
             <Route path="/admin/companies" element={<CompanyManagementPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
+          </Route>
+          <Route element={<SuperAdminRoute />}>
+            <Route path="/admin/signups" element={<SignupApprovalPage />} />
           </Route>
         </Route>
 
