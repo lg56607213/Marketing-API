@@ -3,7 +3,7 @@
 ## 구성
 
 ```
-사용자 ──HTTPS──> Cloudflare (marketagnet.co.kr, www.marketagnet.co.kr)
+사용자 ──HTTPS──> Cloudflare (marketagent.co.kr, www.marketagent.co.kr)
                      │  터널(서버가 바깥으로 연결. 서버에 공개 포트 없음)
                      ▼
               EC2 t4g.small (서울)  ── Spring Boot + 화면(정적 파일)
@@ -61,7 +61,7 @@
 
 ## 4. 도메인을 Cloudflare 에 연결 (처음 한 번)
 
-1. Cloudflare 대시보드 > **Add a domain** > `marketagnet.co.kr` 입력 > **Free** 요금제.
+1. Cloudflare 대시보드 > **Add a domain** > `marketagent.co.kr` 입력 > **Free** 요금제.
 2. Cloudflare 가 알려 주는 **네임서버 2개**(예: `xxx.ns.cloudflare.com`)를 복사합니다.
 3. 도메인을 산 곳(가비아·후이즈 등)의 도메인 관리 > **네임서버 변경**에 그 2개를 넣습니다.
 4. Cloudflare 에서 도메인 상태가 **Active** 가 될 때까지 기다립니다(보통 수십 분, 길면 하루).
@@ -73,8 +73,8 @@
 1. 유형 Cloudflared, 이름 `marketing-aws`.
 2. 설치 화면의 명령어에 나오는 **토큰**(긴 문자열)을 복사합니다. 설치 명령은 실행하지 않아도 됩니다. 배포 스크립트가 서버에서 실행합니다.
 3. Public Hostname 을 두 개 추가합니다. 둘 다 Service `HTTP` / `127.0.0.1:8080`.
-   - Subdomain 비움, Domain `marketagnet.co.kr`
-   - Subdomain `www`, Domain `marketagnet.co.kr`
+   - Subdomain 비움, Domain `marketagent.co.kr`
+   - Subdomain `www`, Domain `marketagent.co.kr`
 
 ## 6. 배포 (이 PC 에서)
 
@@ -89,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File deploy\aws\deploy.ps1 -ServerHost <탄�
 ```
 
 이후 코드를 바꿨을 때는 `-SetupServer` 없이 실행하면 됩니다.
-`HEALTH=200`, `TUNNEL=active` 가 나오면 https://www.marketagnet.co.kr 으로 접속됩니다.
+`HEALTH=200`, `TUNNEL=active` 가 나오면 https://www.marketagent.co.kr 으로 접속됩니다.
 
 ## 운영 메모
 
