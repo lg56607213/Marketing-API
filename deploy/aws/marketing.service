@@ -1,0 +1,20 @@
+[Unit]
+Description=Marketing API (Spring Boot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=marketing
+Group=marketing
+WorkingDirectory=/opt/marketing
+EnvironmentFile=/opt/marketing/app.env
+# t4g.small(2GB) 기준. MySQL 은 RDS 에 있으므로 서버 메모리는 앱만 쓴다.
+ExecStart=/usr/bin/java -Xms256m -Xmx1g -XX:+UseSerialGC -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Seoul -jar /opt/marketing/app/app.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/marketing/logs/app.log
+StandardError=append:/opt/marketing/logs/app.log
+
+[Install]
+WantedBy=multi-user.target
