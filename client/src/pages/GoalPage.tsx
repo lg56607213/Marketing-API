@@ -13,8 +13,8 @@ import { AdScopeBar } from '@/components/ads/AdScopeBar'
 import { apiMessage, goalApi } from '@/services/api'
 import { useAdScopeStore } from '@/store/adScopeStore'
 import type {
-  BusinessModel, GoalCheckinResult, GoalEconomicsResult, GoalKind, GoalMarketCheck, GoalOption, GoalView, KeywordVerdict,
-  ValueSource,
+  BusinessModel, CompetitionAnalysis, DiagnosisFinding, GoalCheckinResult, GoalEconomicsResult, GoalKind, GoalMarketCheck,
+  GoalOption, GoalView, KeywordVerdict, PerformanceDiagnosis, ValueSource,
 } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -233,7 +233,11 @@ export function GoalPage() {
             </div>
           </div>
 
+          {view.analysis?.diagnosis?.hasData && <DiagnosisSection diagnosis={view.analysis.diagnosis} />}
+
           {view.analysis?.market && <MarketSection market={view.analysis.market} />}
+
+          {view.analysis?.competition && <CompetitionSection competition={view.analysis.competition} />}
 
           {view.analysis && (
             <OptionsSection
@@ -363,6 +367,9 @@ function ModelCard({ view, busy, onSave }: { view: GoalView; busy: boolean; onSa
             {row('한 달 광고비 상한', m.budgetLimit == null ? null : m.budgetLimit === 0 ? '없음' : won(m.budgetLimit))}
             {m.segments && m.segments.length > 0 && row('주 고객층', m.segments.join(' · '))}
             {m.concerns && row('고민', m.concerns)}
+            {m.websites && m.websites.length > 0 && row('내 홈페이지', m.websites.join(', '))}
+            {m.competitors && m.competitors.length > 0 && row('경쟁·선도 업체', m.competitors
+              .map((c) => `${c.name}${c.source === 'AI' ? '(AI 추정)' : ''}`).join(', '))}
             {m.keywordGroups && m.keywordGroups.length > 0 && (
               <div className="space-y-1.5 py-1.5 text-sm">
                 <span className="text-muted-foreground">키워드 묶음</span>
@@ -442,6 +449,156 @@ function EconomicsCard({ economics }: { economics: GoalEconomicsResult }) {
             <p className="mt-0.5 text-xs text-muted-foreground">{line.how}</p>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+const SEVERITY: Record<string, { label: string; className: string }> = {
+  HIGH: { label: '심각', className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
+  MEDIUM: { label: '주의', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
+  LOW: { label: '참고', className: 'bg-muted text-muted-foreground' },
+}
+
+function FindingRow({ finding, tone }: { finding: DiagnosisFinding; tone: 'problem' | 'improve' }) {
+  const sev = SEVERITY[finding.severity] ?? SEVERITY.LOW
+  return (
+    <div className="space-y-1 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {tone === 'problem' ? (
+          <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-medium', sev.className)}>{sev.label}</span>
+        ) : (
+          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">개선</span>
+        )}
+        <span className="text-sm font-medium">{finding.title}</span>
+        {finding.amount > 0 && <span className="text-xs tabular-nums text-muted-foreground">관련 금액 {won(finding.amount)}</span>}
+      </div>
+      <p className="text-sm text-muted-foreground">{finding.evidence}</p>
+      <p className="text-sm">→ {finding.action}</p>
+      {finding.keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {finding.keywords.map((k) => <Badge key={k} variant="outline" className="font-normal">{k}</Badge>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 연동된 계정의 최근 실적 진단: 문제점·개선점·새 키워드·제외 키워드 후보. */
+function DiagnosisSection({ diagnosis }: { diagnosis: PerformanceDiagnosis }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardCheck className="h-4 w-4 text-indigo-500" /> 지금 광고 실적 진단
+        </CardTitle>
+        <CardDescription>
+          {diagnosis.since} ~ {diagnosis.until} · 광고비 {won(diagnosis.cost)} · 클릭 {num(diagnosis.clicks)}회 · 전환 {num(diagnosis.conversions)}건
+          {diagnosis.accountCpa > 0 && ` · 문의 1건 ${won(diagnosis.accountCpa)} (목표 ${won(diagnosis.targetCpa)})`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">문제점 {diagnosis.problems.length}건</p>
+          <div className="divide-y">
+            {diagnosis.problems.length === 0
+              ? <p className="py-3 text-sm text-muted-foreground">눈에 띄는 문제는 없습니다.</p>
+              : diagnosis.problems.map((f) => <FindingRow key={f.title} finding={f} tone="problem" />)}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">개선점 {diagnosis.improvements.length}건</p>
+          <div className="divide-y">
+            {diagnosis.improvements.length === 0
+              ? <p className="py-3 text-sm text-muted-foreground">추가로 권할 개선점이 없습니다.</p>
+              : diagnosis.improvements.map((f) => <FindingRow key={f.title} finding={f} tone="improve" />)}
+          </div>
+          {diagnosis.newKeywords.length > 0 && (
+            <div className="mt-3 rounded-md border p-3">
+              <p className="text-xs font-medium">유입 검색어에서 찾은 새 키워드 후보 (입찰가는 아래 표에)</p>
+              <ul className="mt-1 space-y-0.5 text-sm">
+                {diagnosis.newKeywords.map((k) => (
+                  <li key={k.keyword} className="flex justify-between gap-2">
+                    <span>{k.keyword}</span>
+                    <span className="text-xs text-muted-foreground">{k.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        {diagnosis.notes.length > 0 && (
+          <div className="space-y-1 text-xs text-muted-foreground lg:col-span-2">
+            {diagnosis.notes.map((n) => <p key={n}>{n}</p>)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** 경쟁사·선도 업체가 쓰는 것으로 보이는 광고 채널과, 근거를 붙인 채널 권유. */
+function CompetitionSection({ competition }: { competition: CompetitionAnalysis }) {
+  const sourceLabel = (s: string) => (s === 'MINE' ? '내 홈페이지' : s === 'AI' ? 'AI 추정 선도 업체' : '경쟁 업체')
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4 text-indigo-500" /> 경쟁사·선도 업체의 광고 채널
+        </CardTitle>
+        <CardDescription>홈페이지에 심어 둔 광고 추적 코드와 채널 링크로 추정했습니다. 실제 광고비·성과는 공개되지 않습니다.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {competition.sites.map((s) => (
+            <div key={s.url} className={cn('rounded-md border p-3', s.source === 'MINE' && 'bg-muted/40')}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium">{s.name ?? s.title ?? s.url}</p>
+                <Badge variant="outline" className="shrink-0 text-[10px] font-normal">{sourceLabel(s.source)}</Badge>
+              </div>
+              <p className="truncate text-xs text-muted-foreground">{s.url}</p>
+              {s.brandSearches != null && s.brandSearches > 0 && (
+                <p className="mt-1 text-xs">업체 이름 월 검색 {num(s.brandSearches)}회</p>
+              )}
+              {!s.reachable ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{s.note}</p>
+              ) : s.channels.length === 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">첫 화면에서 광고·채널 흔적을 찾지 못했습니다.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {s.channels.map((c) => (
+                    <Badge key={c.channel} variant={c.kind === 'PAID' ? 'secondary' : 'outline'} className="font-normal" title={c.evidence}>
+                      {c.channel}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {competition.suggestions.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">검토해 볼 광고 방법 (정성적 제안 · 추정)</p>
+            {competition.suggestions.map((s) => (
+              <div key={s.channel} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">{s.channel}</span>
+                  <Badge variant="warning" className="text-[10px] font-normal">{s.confidence}</Badge>
+                  <span className="text-xs text-muted-foreground">쓰는 것으로 보이는 업체 {s.adopters}곳</span>
+                </div>
+                <p className="mt-1 text-sm">{s.suggestion}</p>
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {s.evidence.map((e) => <li key={e}>근거: {e}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-0.5 text-[11px] text-muted-foreground">
+          {competition.limits.map((l) => <p key={l}>※ {l}</p>)}
+        </div>
       </CardContent>
     </Card>
   )

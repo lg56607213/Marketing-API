@@ -627,6 +627,86 @@ export interface BusinessModel {
   concerns?: string
   /** 고객층 × 검색 의도로 묶은 키워드 */
   keywordGroups?: GoalKeywordGroup[]
+  /** 내 홈페이지 주소들 */
+  websites?: string[]
+  /** 경쟁 업체·업계 선도 업체 */
+  competitors?: GoalCompetitor[]
+}
+
+export interface GoalCompetitor {
+  name: string
+  url?: string
+  /** USER(직접 알려 줌) · AI(업계 선도 업체로 추정) */
+  source?: string
+}
+
+/** HIGH · MEDIUM · LOW */
+export interface DiagnosisFinding {
+  severity: string
+  title: string
+  evidence: string
+  action: string
+  amount: number
+  keywords: string[]
+}
+
+export interface DiagnosisKeywordIdea {
+  keyword: string
+  clicks: number
+  cost: number
+  reason: string
+}
+
+export interface PerformanceDiagnosis {
+  hasData: boolean
+  since: string
+  until: string
+  cost: number
+  clicks: number
+  conversions: number
+  accountCpa: number
+  targetCpa: number
+  problems: DiagnosisFinding[]
+  improvements: DiagnosisFinding[]
+  newKeywords: DiagnosisKeywordIdea[]
+  negativeCandidates: string[]
+  notes: string[]
+}
+
+export interface ChannelSignal {
+  channel: string
+  /** PAID(광고) · OWNED(직접 운영) */
+  kind: string
+  evidence: string
+}
+
+export interface CompetitorSiteScan {
+  name: string | null
+  url: string
+  /** USER · AI · MINE */
+  source: string
+  reachable: boolean
+  title: string | null
+  channels: ChannelSignal[]
+  brandSearches: number | null
+  note: string | null
+}
+
+export interface ChannelSuggestion {
+  channel: string
+  kind: string
+  effect: string
+  evidence: string[]
+  adopters: number
+  /** 추정 */
+  confidence: string
+  suggestion: string
+}
+
+export interface CompetitionAnalysis {
+  sites: CompetitorSiteScan[]
+  suggestions: ChannelSuggestion[]
+  limits: string[]
 }
 
 export interface EconomicsLine {
@@ -719,6 +799,8 @@ export interface GoalAnalysis {
   analyzedAt: string
   market: GoalMarketCheck | null
   solution: string | null
+  diagnosis: PerformanceDiagnosis | null
+  competition: CompetitionAnalysis | null
 }
 
 export interface GoalMessage {

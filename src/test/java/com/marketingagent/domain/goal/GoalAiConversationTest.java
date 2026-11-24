@@ -15,6 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import com.marketingagent.domain.onboarding.SiteInspector;
+import java.util.Map;
 
 /**
  * AI 상담: 넓게 한 번 묻고, 긴 답에서 한꺼번에 추린 뒤, 빠진 꼭 필요한 항목만 묶어서 되묻고,
@@ -34,6 +37,9 @@ class GoalAiConversationTest {
 
         @Override
         public AiResponse generate(AiRequest request) {
+            if (request.systemPrompt().contains("선도 업체를 최대")) {
+                return new AiResponse("{\"competitors\": [{\"name\": \"선도렌트\", \"url\": \"https://leader.example.com\"}]}", 1, 1);
+            }
             if (request.systemPrompt().contains("종합 제안")) {
                 solutionInputs.add(request.userPrompt());
                 return new AiResponse("■ 한 줄 진단\n• 첫 계약만으로는 시세가 비쌉니다.", 1, 1);
@@ -47,6 +53,13 @@ class GoalAiConversationTest {
         @Bean
         ScriptedAi scriptedAi() {
             return new ScriptedAi();
+        }
+
+        /** 경쟁사 홈페이지를 실제로 열지 않고 정해 둔 소스를 준다. */
+        @Bean
+        @Primary
+        SiteInspector fakeSiteInspector() {
+            return new ChannelScannerTest.FakeInspector(Map.of("https://leader.example.com", ChannelScannerTest.RIVAL_HTML));
         }
     }
 
@@ -111,9 +124,17 @@ class GoalAiConversationTest {
             assertThat(analysis.solution()).startsWith("■ 한 줄 진단");
             assertThat(last(v)).contains("한 달 광고비 상한은 말씀이 없어서").contains("■ 한 줄 진단");
 
+            // 경쟁사를 말하지 않았으면 AI 가 업계 선도 업체를 추정하고, 그 홈페이지의 흔적으로 채널을 권한다.
+            assertThat(v.model().getCompetitors()).extracting(BusinessModel.Competitor::getSource).containsOnly("AI");
+            assertThat(analysis.competition()).isNotNull();
+            assertThat(analysis.competition().suggestions()).extracting(ChannelScanner.ChannelSuggestion::channel)
+                    .contains("메타(페이스북·인스타그램) 광고");
+            assertThat(last(v)).contains("경쟁사·선도 업체 1곳의 광고 채널을 살펴봤습니다");
+
             // 종합 제안에는 서버가 계산·조사한 숫자를 넘긴다.
             assertThat(ai.solutionInputs).hasSize(1);
-            assertThat(ai.solutionInputs.get(0)).contains("목표CPA_첫계약기준").contains("입찰가_3위").contains("법인");
+            assertThat(ai.solutionInputs.get(0)).contains("목표CPA_첫계약기준").contains("입찰가_3위").contains("법인")
+                    .contains("경쟁사분석").contains("메타 픽셀(fbq)");
         });
     }
 

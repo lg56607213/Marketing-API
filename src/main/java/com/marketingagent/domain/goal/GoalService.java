@@ -21,6 +21,9 @@ import com.marketingagent.domain.ads.planner.PlannerDtos.PlanProposal;
 import com.marketingagent.domain.ads.planner.PlannerDtos.PlanRequest;
 import com.marketingagent.domain.ads.planner.PlannerDtos.Scenario;
 import com.marketingagent.domain.goal.BusinessModel.Offering;
+import com.marketingagent.domain.onboarding.BusinessProfile;
+import com.marketingagent.domain.onboarding.BusinessProfileRepository;
+import com.marketingagent.integration.naver.SearchAdClient;
 import com.marketingagent.domain.goal.BusinessModel.Slot;
 import com.marketingagent.domain.goal.BusinessModel.SlotType;
 import com.marketingagent.domain.goal.GoalDtos.Analysis;
@@ -86,6 +89,9 @@ public class GoalService {
     private final KeywordStatDailyRepository statRepository;
     private final AdKeywordRepository keywordRepository;
     private final KeywordBidResearch keywordResearch;
+    private final PerformanceDiagnosis performanceDiagnosis;
+    private final ChannelScanner channelScanner;
+    private final BusinessProfileRepository profileRepository;
     private final ObjectMapper objectMapper;
     private final boolean aiEnabled;
 
@@ -93,8 +99,12 @@ public class GoalService {
             GoalMessageRepository messageRepository, GoalCheckinRepository checkinRepository,
             RuleBasedInterviewer rules, AiInterviewer ai, PlanService planService, AutopilotService autopilotService,
             KeywordStatDailyRepository statRepository, AdKeywordRepository keywordRepository,
-            KeywordBidResearch keywordResearch, ObjectMapper objectMapper,
+            KeywordBidResearch keywordResearch, PerformanceDiagnosis performanceDiagnosis, ChannelScanner channelScanner,
+            BusinessProfileRepository profileRepository, ObjectMapper objectMapper,
             @Value("${ai.provider:stub}") String aiProvider) {
+        this.performanceDiagnosis = performanceDiagnosis;
+        this.channelScanner = channelScanner;
+        this.profileRepository = profileRepository;
         this.accountService = accountService;
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
@@ -130,8 +140,10 @@ public class GoalService {
             • 문의가 10건 오면 보통 몇 건이 계약되는지
             • 한 달에 광고로 얻고 싶은 것(매출·계약·문의)과 쓸 수 있는 광고비
             • 요즘 광고에서 고민인 점
+            • 내 홈페이지 주소, 그리고 신경 쓰이는 경쟁 업체나 따라 하고 싶은 업계 선도 업체(이름·홈페이지)
 
-            말씀을 정리해서 빠진 것만 한 번에 여쭤본 뒤, 목표 CPA 계산과 키워드별 입찰가 조사까지 해서 종합 제안을 드릴게요.""";
+            말씀을 정리해서 빠진 것만 한 번에 여쭤본 뒤, 목표 CPA 계산과 키워드별 입찰가 조사, 연동된 광고 실적 진단,
+            경쟁 업체의 광고 채널 분석까지 해서 종합 제안을 드릴게요.""";
 
     static final String RETURN_QUESTION = """
             지난번에 알려 주신 사업 구조는 그대로 두었어요.
@@ -476,20 +488,38 @@ public class GoalService {
 
         String[] recommendation = recommend(model, options, measuredCvr, limit);
 
+        // 이미 광고를 하던 계정이면 최근 실적부터 진단한다. 유입 검색어에서 찾은 새 키워드는 입찰가 조사에 맨 앞으로 넣는다.
+        PerformanceDiagnosis.Result diagnosis = null;
+        try {
+            diagnosis = performanceDiagnosis.diagnose(account, econ.targetCpa());
+        } catch (RuntimeException e) {
+            log.warn("실적 진단 실패: {}", e.getMessage());
+            notes.add("최근 광고 실적을 진단하지 못했습니다. 잠시 뒤 '다시 검토'를 눌러 주세요.");
+        }
+        List<BusinessModel.KeywordGroup> groups = new ArrayList<>();
+        if (diagnosis != null && !diagnosis.newKeywords().isEmpty()) {
+            groups.add(new BusinessModel.KeywordGroup("유입 검색어에서 발견",
+                    diagnosis.newKeywords().stream().map(PerformanceDiagnosis.KeywordIdea::keyword).limit(5).toList()));
+        }
+        groups.addAll(keywordGroups(model, suggestions(account)));
+
+        SearchAdClient client = null;
         KeywordBidResearch.MarketCheck market = null;
         PlanProposal basePlan = options.stream().map(Option::plan).filter(Objects::nonNull).findFirst().orElse(null);
         try {
-            market = keywordResearch.research(accountService.scope(account).client(),
-                    keywordGroups(model, suggestions(account)),
+            client = accountService.scope(account).client();
+            market = keywordResearch.research(client, groups,
                     basePlan == null ? DEFAULT_CVR_PCT : basePlan.cvrPct(),
                     basePlan == null ? "기본 가정값" : basePlan.cvrSource(), econ);
         } catch (RuntimeException e) {
             log.warn("키워드 입찰가 조사 실패: {}", e.getMessage());
             notes.add("키워드별 입찰가를 조사하지 못했습니다. 네이버 연결을 확인한 뒤 '다시 검토'를 눌러 주세요.");
         }
-        String solution = solution(model, econ, market, options, recommendation);
+
+        ChannelScanner.Result competition = competition(account, session, model, client);
+        String solution = solution(model, econ, market, diagnosis, competition, options, recommendation);
         Analysis analysis = new Analysis(econ, options, recommendation[0], recommendation[1], notes, LocalDateTime.now(),
-                market, solution);
+                market, solution, diagnosis, competition);
         session.analyzed(json(analysis));
         return analysis;
     }
@@ -569,7 +599,19 @@ public class GoalService {
             sb.append(String.format("• 네이버 시세로 본 문의 1건 비용: 약 %s (키워드 %d개를 평균 3위로 걸 때, %s)\n",
                     won(a.market().marketCpa()), a.market().keywords().size(), verdictLabel(a.market().verdict())));
         }
-        sb.append(String.format("• 목표를 채우려면 한 달에 계약 %,d건, 문의 %,d건이 필요합니다.\n\n", e.dealsNeeded(), e.leadsNeeded()));
+        sb.append(String.format("• 목표를 채우려면 한 달에 계약 %,d건, 문의 %,d건이 필요합니다.\n", e.dealsNeeded(), e.leadsNeeded()));
+        if (a.diagnosis() != null && a.diagnosis().hasData()) {
+            PerformanceDiagnosis.Result d = a.diagnosis();
+            sb.append(String.format("• 최근 30일 실적 진단: 광고비 %s · 전환 %,d건%s → 문제점 %d건, 개선점 %d건\n", won(d.cost()),
+                    d.conversions(), d.accountCpa() > 0 ? " · 문의 1건 " + won(d.accountCpa()) : "",
+                    d.problems().size(), d.improvements().size()));
+        }
+        if (a.competition() != null) {
+            sb.append(String.format("• 경쟁사·선도 업체 %d곳의 광고 채널을 살펴봤습니다(권유 %d건).\n",
+                    a.competition().sites().stream().filter(s -> !"MINE".equals(s.source())).count(),
+                    a.competition().suggestions().size()));
+        }
+        sb.append('\n');
         sb.append("네이버 검색량과 예상 클릭으로 따져 본 운영안:\n");
         for (Option o : a.options()) {
             if (o.plan() == null) {
@@ -593,7 +635,8 @@ public class GoalService {
 
     /** 종합 제안. AI 가 있으면 서버 숫자만 넘겨 쓰게 하고, 없거나 실패하면 정해진 틀로 만든다. */
     private String solution(BusinessModel model, GoalEconomics.Result econ, KeywordBidResearch.MarketCheck market,
-            List<Option> options, String[] recommendation) {
+            PerformanceDiagnosis.Result diagnosis, ChannelScanner.Result competition, List<Option> options,
+            String[] recommendation) {
         if (aiEnabled) {
             Map<String, Object> facts = new LinkedHashMap<>();
             facts.put("업종", model.getIndustry());
@@ -640,29 +683,97 @@ public class GoalService {
             }).toList());
             Option recommended = recommendation[0] == null ? null : find(options, recommendation[0]);
             facts.put("추천안", recommended == null ? "없음" : recommended.label());
+            if (diagnosis != null && diagnosis.hasData()) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("기간", diagnosis.since() + " ~ " + diagnosis.until());
+                d.put("광고비", diagnosis.cost());
+                d.put("클릭", diagnosis.clicks());
+                d.put("전환", diagnosis.conversions());
+                d.put("실제CPA", diagnosis.accountCpa());
+                d.put("문제점", diagnosis.problems());
+                d.put("개선점", diagnosis.improvements());
+                d.put("새키워드후보", diagnosis.newKeywords());
+                d.put("제외키워드후보", diagnosis.negativeCandidates());
+                facts.put("실적진단", d);
+            }
+            if (competition != null && !competition.sites().isEmpty()) {
+                Map<String, Object> c = new LinkedHashMap<>();
+                c.put("살펴본업체", competition.sites());
+                c.put("권유", competition.suggestions());
+                c.put("한계", competition.limits());
+                facts.put("경쟁사분석", c);
+            }
             Optional<String> text = ai.solution(json(facts));
             if (text.isPresent()) {
                 return text.get();
             }
         }
-        return ruleSolution(market);
+        return ruleSolution(market, diagnosis, competition);
     }
 
-    /** AI 없이 만드는 종합 제안. 네이버 조사 결과만으로 진단·먼저 쓸 키워드·묶음을 보여 준다. */
-    static String ruleSolution(KeywordBidResearch.MarketCheck market) {
-        if (market == null || market.keywords().isEmpty()) {
+    /** AI 없이 만드는 종합 제안. 계산·조사·진단 결과를 정해진 틀에 담는다. */
+    static String ruleSolution(KeywordBidResearch.MarketCheck market, PerformanceDiagnosis.Result diagnosis,
+            ChannelScanner.Result competition) {
+        StringBuilder sb = new StringBuilder();
+        if (market != null && !market.keywords().isEmpty()) {
+            sb.append("■ 한 줄 진단\n• ").append(market.explanation()).append('\n');
+            sb.append("■ 먼저 쓸 키워드\n");
+            market.keywords().stream().filter(k -> k.bid3() > 0).limit(5).forEach(k -> sb.append(String.format(
+                    "• %s: 3위 입찰가 %s · 예상 문의 1건 %s (%s)\n", k.keyword(), won(k.bid3()),
+                    k.expectedCpa() > 0 ? won(k.expectedCpa()) : "예측 없음", verdictLabel(k.verdict()))));
+            Map<String, List<String>> byGroup = new LinkedHashMap<>();
+            market.keywords().forEach(k -> byGroup.computeIfAbsent(k.group(), g -> new ArrayList<>()).add(k.keyword()));
+            sb.append("■ 고객층·의도별 키워드 묶음\n");
+            byGroup.forEach((g, ks) -> sb.append("• ").append(g).append(": ").append(String.join(", ", ks)).append('\n'));
+        }
+        if (diagnosis != null && diagnosis.hasData()
+                && (!diagnosis.problems().isEmpty() || !diagnosis.improvements().isEmpty())) {
+            sb.append("■ 지금 광고의 문제점과 개선\n");
+            diagnosis.problems().stream().limit(4).forEach(f -> sb.append("• [문제] ").append(f.title()).append(": ")
+                    .append(f.evidence()).append(' ').append(f.action()).append('\n'));
+            diagnosis.improvements().stream().limit(3).forEach(f -> sb.append("• [개선] ").append(f.title()).append(": ")
+                    .append(f.evidence()).append(' ').append(f.action()).append('\n'));
+        }
+        if (competition != null && !competition.suggestions().isEmpty()) {
+            sb.append("■ 경쟁사·선도 업체에서 배울 광고 방법 (추정)\n");
+            competition.suggestions().stream().limit(4).forEach(s -> {
+                sb.append("• ").append(s.suggestion()).append('\n');
+                s.evidence().stream().limit(2).forEach(line -> sb.append("  - 근거: ").append(line).append('\n'));
+            });
+        }
+        String text = sb.toString().strip();
+        return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * 경쟁사·선도 업체의 광고 채널을 살펴본다. 사장님이 경쟁사를 말하지 않았으면 AI 가 업계 선도 업체를 추정하고,
+     * 그 목록은 사업 구조에 저장해 사장님이 오른쪽 패널에서 고칠 수 있게 한다.
+     */
+    private ChannelScanner.Result competition(Long account, GoalSession session, BusinessModel model, SearchAdClient client) {
+        List<BusinessModel.Competitor> rivals = model.getCompetitors() == null ? List.of() : model.getCompetitors();
+        if (rivals.isEmpty() && aiEnabled && model.getIndustry() != null) {
+            rivals = ai.suggestCompetitors(model);
+            if (!rivals.isEmpty()) {
+                model.setCompetitors(new ArrayList<>(rivals));
+                session.updateModel(json(model));
+            }
+        }
+        if (rivals.stream().noneMatch(c -> c.getUrl() != null && !c.getUrl().isBlank())) {
             return null;
         }
-        StringBuilder sb = new StringBuilder("■ 한 줄 진단\n• ").append(market.explanation()).append('\n');
-        sb.append("■ 먼저 쓸 키워드\n");
-        market.keywords().stream().filter(k -> k.bid3() > 0).limit(5).forEach(k -> sb.append(String.format(
-                "• %s: 3위 입찰가 %s · 예상 문의 1건 %s (%s)\n", k.keyword(), won(k.bid3()),
-                k.expectedCpa() > 0 ? won(k.expectedCpa()) : "예측 없음", verdictLabel(k.verdict()))));
-        Map<String, List<String>> byGroup = new LinkedHashMap<>();
-        market.keywords().forEach(k -> byGroup.computeIfAbsent(k.group(), g -> new ArrayList<>()).add(k.keyword()));
-        sb.append("■ 고객층·의도별 키워드 묶음\n");
-        byGroup.forEach((g, ks) -> sb.append("• ").append(g).append(": ").append(String.join(", ", ks)).append('\n'));
-        return sb.toString().strip();
+        List<String> mine = new ArrayList<>(model.getWebsites() == null ? List.of() : model.getWebsites());
+        profileRepository.findByAdAccountId(account).map(BusinessProfile::getHomepageUrl)
+                .filter(u -> u != null && !u.isBlank()).ifPresent(u -> {
+                    if (!mine.contains(u)) {
+                        mine.add(u);
+                    }
+                });
+        try {
+            return channelScanner.scan(mine, rivals, client);
+        } catch (RuntimeException e) {
+            log.warn("경쟁사 채널 분석 실패: {}", e.getMessage());
+            return null;
+        }
     }
 
     static String verdictLabel(String verdict) {

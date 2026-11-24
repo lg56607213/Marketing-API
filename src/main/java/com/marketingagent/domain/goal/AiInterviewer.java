@@ -47,6 +47,8 @@ public class AiInterviewer {
             - concerns: 사장님이 말한 지금 상황·고민을 한두 문장으로 추린 것
             - keywordGroups: [{name: "고객층 · 검색 의도", keywords: [...]}] 3~6묶음, 묶음마다 키워드 2~4개
             - seedKeywords: keywordGroups 중 가장 중요한 키워드 1~5개
+            - websites: 사장님 회사의 홈페이지 주소 목록 (말한 것만)
+            - competitors: [{name, url}] 사장님이 말한 경쟁 업체·따라 하고 싶은 업체 (말한 것만, 주소를 모르면 name 만)
 
             키워드 규칙:
             - "중고화물차"처럼 넓은 한 단어만 쓰지 않는다. 고객층과 검색 의도(견적·가격·조건·비교·승인·지역 등)를 붙인
@@ -78,9 +80,25 @@ public class AiInterviewer {
             ■ 고객층별 전략 — 고객층마다 어떤 키워드 묶음을, 몇 위 정도로(1·3·5위 입찰가 참고) 걸지.
             ■ 먼저 쓸 키워드 — 판정이 '목표 이내'인 키워드부터 3~5개를 입찰가와 함께. 없으면 가장 싼 것부터 낮은 순위로.
             ■ 예산 배분 — 추천 운영안의 한 달 예산을 기준으로 고객층별로 어떻게 나눌지(비율은 말해도 되지만 새 금액은 만들지 않는다).
+            ■ 지금 광고의 문제점과 개선 — '실적진단'이 있으면 문제점·개선점을 근거 숫자와 함께 중요한 순서로 3~5개.
+              새 키워드 후보·제외 키워드 후보가 있으면 이름을 든다. '실적진단'이 없으면 이 제목은 뺀다.
+            ■ 경쟁사·선도 업체에서 배울 광고 방법 — '경쟁사분석'의 권유마다 "OO은(는) 홈페이지의 OO 흔적으로 보아 OO 광고를
+              하고 있는 것으로 추정되며, 이 채널은 보통 OO 효과를 노립니다. 사장님도 OO을 작은 예산으로 시험해 보세요" 형식으로 쓴다.
+              흔적이 없는 채널은 업체가 쓴다고 말하지 않는다. 업계에서 흔히 쓰는 방법을 덧붙일 때는 "(일반적인 업계 관행, 근거 수치 없음)"을 붙인다.
+              '경쟁사분석'이 없으면 업종에 맞는 방법 1~2개를 "(일반적인 업계 관행, 근거 수치 없음)"으로만 쓴다.
             ■ 전환을 올릴 방법 — 랜딩 페이지·상담 응대 등 문의 1건 비용을 낮출 실행 항목 2~3개.
             ■ 첫 2주 할 일 — 체크리스트 3~4개.
+            - 경쟁사의 광고비·성과는 어디에도 공개되지 않으므로 숫자로 말하지 않는다. "추정"이라고 쓴다.
             - 결과는 제안 본문만 출력한다.
+            """;
+
+    private static final String COMPETITOR_PROMPT = """
+            너는 한국 시장에 밝은 마케팅 리서처다. 주어진 업종·고객층에서 한국 시장의 대표적인 선도 업체를 최대 3곳 고른다.
+            - 실제로 존재한다고 확신하는 업체만 쓴다. 확신이 없으면 빈 목록을 준다.
+            - url 은 그 업체의 공식 홈페이지 주소를 알고 있을 때만 쓰고, 모르면 빈 문자열로 둔다.
+            - 사장님 회사 자신은 넣지 않는다.
+            - 반드시 아래 JSON 하나만 출력한다.
+            {"competitors": [{"name": "업체 이름", "url": "https://..."}]}
             """;
 
 
@@ -125,6 +143,42 @@ public class AiInterviewer {
             log.warn("AI 종합 제안을 쓰지 못해 정해진 문장으로 대신합니다: {}", e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * 경쟁사를 듣지 못했을 때 업계 선도 업체를 추정한다. 결과는 출처를 AI 로 표시하고, 주소는 서버가 실제로 열어 확인한다.
+     */
+    public List<BusinessModel.Competitor> suggestCompetitors(BusinessModel model) {
+        try {
+            String input = String.format("업종: %s%n고객층: %s%n상품: %s%n사장님 홈페이지: %s", model.getIndustry(),
+                    model.getSegments(), model.getOfferings().stream().map(Offering::getName).toList(), model.getWebsites());
+            String raw = aiProvider.generate(new AiRequest(COMPETITOR_PROMPT, input, null)).content();
+            JsonNode json = objectMapper.readTree(extractJson(raw));
+            return competitors(json.path("competitors"), "AI");
+        } catch (Exception e) {
+            log.warn("업계 선도 업체를 추정하지 못했습니다: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static List<BusinessModel.Competitor> competitors(JsonNode array, String source) {
+        List<BusinessModel.Competitor> result = new ArrayList<>();
+        if (array == null || !array.isArray()) {
+            return result;
+        }
+        for (JsonNode node : array) {
+            String name = node.path("name").asText("").trim();
+            String url = node.path("url").asText("").trim();
+            if (name.isEmpty() || name.length() > 50 || result.size() >= 4) {
+                continue;
+            }
+            if (!url.isEmpty() && (url.length() > 200 || !url.matches("(?i)^(https?://)?[a-z0-9.-]+\\.[a-z]{2,}(/\\S*)?$"))) {
+                url = "";
+            }
+            String from = "AI".equals(node.path("source").asText()) ? "AI" : source;
+            result.add(new BusinessModel.Competitor(name, url.isEmpty() ? null : url, from));
+        }
+        return result;
     }
 
     private String prompt(BusinessModel current, List<GoalMessage> history, String userText, Slot nextSlot,
@@ -214,6 +268,15 @@ public class AiInterviewer {
             m.setSegments(segments);
         }
         text(p, "concerns", 300).ifPresent(m::setConcerns);
+        List<String> websites = strings(p.get("websites"), 3, 200).stream()
+                .filter(u -> u.matches("(?i)^(https?://)?[a-z0-9.-]+\\.[a-z]{2,}(/\\S*)?$")).toList();
+        if (!websites.isEmpty()) {
+            m.setWebsites(new ArrayList<>(websites));
+        }
+        List<BusinessModel.Competitor> rivals = competitors(p.get("competitors"), BusinessModel.SOURCE_USER);
+        if (!rivals.isEmpty()) {
+            m.setCompetitors(new ArrayList<>(rivals));
+        }
         if (p.has("keywordGroups") && p.get("keywordGroups").isArray()) {
             List<BusinessModel.KeywordGroup> groups = new ArrayList<>();
             for (JsonNode node : p.get("keywordGroups")) {

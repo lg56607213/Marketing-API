@@ -61,6 +61,8 @@ public final class GoalDtos {
      * @param recommended 추천 안의 key
      * @param market      목표 CPA 와 네이버 시세(키워드별 1·3·5위 입찰가, 문의 1건 비용)를 나란히 놓은 결과. 조사 실패 시 null
      * @param solution    고객층·키워드·예산·전환 개선을 묶은 종합 제안 글
+     * @param diagnosis   이미 광고하던 계정의 최근 실적 진단(문제점·개선점·새 키워드·제외 키워드). 실패 시 null
+     * @param competition 경쟁사·선도 업체의 광고 채널 추정과 채널 권유. 살펴볼 업체가 없으면 null
      */
     public record Analysis(
             GoalEconomics.Result economics,
@@ -70,7 +72,9 @@ public final class GoalDtos {
             List<String> notes,
             LocalDateTime analyzedAt,
             KeywordBidResearch.MarketCheck market,
-            String solution
+            String solution,
+            PerformanceDiagnosis.Result diagnosis,
+            ChannelScanner.Result competition
     ) {}
 
     /**

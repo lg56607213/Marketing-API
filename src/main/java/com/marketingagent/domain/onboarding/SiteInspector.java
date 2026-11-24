@@ -104,6 +104,22 @@ public class SiteInspector {
         return new SiteCheck(true, title, description, naver, google, form, notes);
     }
 
+    /**
+     * 공개 홈페이지의 첫 화면 소스를 돌려준다. 내부망 주소는 열지 않는다(inspect 와 같은 검사).
+     * 열지 못하면 빈 값.
+     */
+    public java.util.Optional<String> html(String url) {
+        try {
+            return java.util.Optional.of(fetch(URI.create(normalize(url)), true));
+        } catch (BlockedAddressException e) {
+            log.info("공개 주소가 아니라 열지 않음: {}", url);
+            return java.util.Optional.empty();
+        } catch (Exception e) {
+            log.info("홈페이지 열기 실패 {}: {}", url, e.toString());
+            return java.util.Optional.empty();
+        }
+    }
+
     private String fetch(URI uri, boolean followOnce) throws Exception {
         guard(uri);
         HttpRequest request = HttpRequest.newBuilder(uri)

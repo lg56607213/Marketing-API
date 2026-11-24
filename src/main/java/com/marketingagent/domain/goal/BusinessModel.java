@@ -67,6 +67,12 @@ public class BusinessModel {
     /** AI 상담에서 빠진 항목을 되물은 횟수. 정해 둔 횟수를 넘으면 더 묻지 않고 가정으로 채운다 */
     private Integer followUps;
 
+    /** 내 홈페이지 주소들. 고객층마다 사이트가 다를 수 있다 */
+    private List<String> websites = new ArrayList<>();
+
+    /** 경쟁 업체·업계 선도 업체. 어떤 광고 채널을 쓰는지 살펴볼 대상 */
+    private List<Competitor> competitors = new ArrayList<>();
+
     public enum RevenueModel {
         /** 직접 팔거나 빌려준다 */
         DIRECT,
@@ -115,6 +121,25 @@ public class BusinessModel {
         public KeywordGroup(String name, List<String> keywords) {
             this.name = name;
             this.keywords = keywords;
+        }
+    }
+
+    @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Competitor {
+        private String name;
+        private String url;
+        /** USER(사장님이 알려 줌) · AI(AI 가 업계 선도 업체로 추정) */
+        private String source;
+
+        public Competitor() {
+        }
+
+        public Competitor(String name, String url, String source) {
+            this.name = name;
+            this.url = url;
+            this.source = source;
         }
     }
 
