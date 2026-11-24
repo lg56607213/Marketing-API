@@ -56,7 +56,14 @@ app:
   allow-weak-admin-password: ${APP_ALLOW_WEAK_ADMIN_PASSWORD:false}
 
 ai:
+  # stub | openai | anthropic
   provider: ${AI_PROVIDER:stub}
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${ANTHROPIC_MODEL:claude-opus-5-5}
+    max-tokens: ${ANTHROPIC_MAX_TOKENS:16000}
+    # low | medium | high | xhigh | max. 상담 답장은 빨라야 해서 medium 으로 둔다
+    effort: ${ANTHROPIC_EFFORT:medium}
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4.1-mini}

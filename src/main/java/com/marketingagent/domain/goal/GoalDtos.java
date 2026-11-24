@@ -59,6 +59,8 @@ public final class GoalDtos {
      * 사업 구조로 계산한 목표와, 그 목표를 네이버 키워드 수요·예상 성과에 대 본 결과.
      *
      * @param recommended 추천 안의 key
+     * @param market      목표 CPA 와 네이버 시세(키워드별 1·3·5위 입찰가, 문의 1건 비용)를 나란히 놓은 결과. 조사 실패 시 null
+     * @param solution    고객층·키워드·예산·전환 개선을 묶은 종합 제안 글
      */
     public record Analysis(
             GoalEconomics.Result economics,
@@ -66,7 +68,9 @@ public final class GoalDtos {
             String recommended,
             String recommendReason,
             List<String> notes,
-            LocalDateTime analyzedAt
+            LocalDateTime analyzedAt,
+            KeywordBidResearch.MarketCheck market,
+            String solution
     ) {}
 
     /**

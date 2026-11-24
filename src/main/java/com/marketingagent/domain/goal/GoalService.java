@@ -35,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,10 @@ public class GoalService {
     public static final String OPTION_LIMIT = "LIMIT";
     public static final String OPTION_TRIAL = "TRIAL";
 
+    /** AI 상담에서 빠진 항목을 되묻는 최대 횟수. 넘으면 꼭 필요한 항목 말고는 가정으로 채우고 계산한다. */
+    static final int MAX_FOLLOW_UPS = 2;
+    static final double DEFAULT_CVR_PCT = 2.0;
+
     private final AdAccountService accountService;
     private final GoalSessionRepository sessionRepository;
     private final GoalMessageRepository messageRepository;
@@ -80,13 +85,15 @@ public class GoalService {
     private final AutopilotService autopilotService;
     private final KeywordStatDailyRepository statRepository;
     private final AdKeywordRepository keywordRepository;
+    private final KeywordBidResearch keywordResearch;
     private final ObjectMapper objectMapper;
     private final boolean aiEnabled;
 
     public GoalService(AdAccountService accountService, GoalSessionRepository sessionRepository,
             GoalMessageRepository messageRepository, GoalCheckinRepository checkinRepository,
             RuleBasedInterviewer rules, AiInterviewer ai, PlanService planService, AutopilotService autopilotService,
-            KeywordStatDailyRepository statRepository, AdKeywordRepository keywordRepository, ObjectMapper objectMapper,
+            KeywordStatDailyRepository statRepository, AdKeywordRepository keywordRepository,
+            KeywordBidResearch keywordResearch, ObjectMapper objectMapper,
             @Value("${ai.provider:stub}") String aiProvider) {
         this.accountService = accountService;
         this.sessionRepository = sessionRepository;
@@ -98,6 +105,7 @@ public class GoalService {
         this.autopilotService = autopilotService;
         this.statRepository = statRepository;
         this.keywordRepository = keywordRepository;
+        this.keywordResearch = keywordResearch;
         this.objectMapper = objectMapper;
         this.aiEnabled = !"stub".equalsIgnoreCase(aiProvider);
     }
@@ -113,6 +121,22 @@ public class GoalService {
 
     // --- 대화 ---
 
+    static final String OPEN_QUESTION = """
+            안녕하세요. 광고 목표와 전략을 함께 잡아 볼게요.
+
+            사업을 편하게 소개해 주세요. 길어도 괜찮고, 아래 내용이 들어 있으면 더 정확해집니다. 모르는 건 빼셔도 됩니다.
+            • 어떤 사업이고, 주 고객층은 누구인지 (고객층마다 사이트가 다르면 함께)
+            • 상품·서비스별로 계약 1건에 받는 돈과 실제로 남는 돈, 대략의 판매 비중
+            • 문의가 10건 오면 보통 몇 건이 계약되는지
+            • 한 달에 광고로 얻고 싶은 것(매출·계약·문의)과 쓸 수 있는 광고비
+            • 요즘 광고에서 고민인 점
+
+            말씀을 정리해서 빠진 것만 한 번에 여쭤본 뒤, 목표 CPA 계산과 키워드별 입찰가 조사까지 해서 종합 제안을 드릴게요.""";
+
+    static final String RETURN_QUESTION = """
+            지난번에 알려 주신 사업 구조는 그대로 두었어요.
+            이번 달 목표(매출·계약·문의 중 하나)와 쓸 수 있는 광고비, 그리고 그사이 바뀐 점이나 고민을 편하게 말씀해 주세요.""";
+
     /**
      * 새 상담을 연다. 전에 상담한 적이 있으면 사업 구조는 이어받고 목표만 다시 묻는다.
      */
@@ -122,12 +146,19 @@ public class GoalService {
         Optional<GoalSession> previous = sessionRepository.findTopByAdAccountIdOrderByIdDesc(account);
 
         BusinessModel model = previous.map(this::read).orElseGet(BusinessModel::new);
+        model.setFollowUps(0);
         if (previous.isPresent()) {
             model.setGoalType(null);
             model.setGoalAmount(null);
             model.setBudgetLimit(null);
         }
         GoalSession session = sessionRepository.save(new GoalSession(account, json(model)));
+
+        if (aiEnabled) {
+            // AI 가 있으면 하나씩 캐묻지 않고, 넓게 한 번 묻고 그 답에서 한꺼번에 추린다.
+            say(session, GoalMessage.ASSISTANT, previous.isEmpty() ? OPEN_QUESTION : RETURN_QUESTION);
+            return view(session);
+        }
 
         String greeting = previous.isEmpty()
                 ? "안녕하세요. 광고 목표를 함께 정해 볼게요.\n사업 구조를 몇 가지 여쭤본 뒤, 문의 1건에 광고비를 얼마까지 써도 되는지(목표 CPA)와 "
@@ -170,10 +201,15 @@ public class GoalService {
             if (turn.isPresent()) {
                 BusinessModel updated = turn.get().model();
                 applyUnknown(updated, turn.get().unknown(), suggestions, notes);
-                if (!json(updated).equals(before)) {
+                updated.setFollowUps((updated.getFollowUps() == null ? 0 : updated.getFollowUps()) + 1);
+                if (!json(updated).equals(before) || turn.get().reply() != null) {
                     model = updated;
                     aiReply = turn.get().reply();
                     understood = true;
+                    // 꼭 필요한 것이 다 모였거나 되물을 만큼 되물었으면, 나머지는 묻지 않고 가정으로 채운다.
+                    if (model.missingCritical().isEmpty() || model.getFollowUps() >= MAX_FOLLOW_UPS) {
+                        fillAssumptions(model, suggestions, notes);
+                    }
                 }
             }
         }
@@ -192,9 +228,12 @@ public class GoalService {
             reply = join(notes) + "\n\n" + rules.question(model, slot, suggestions);
         } else if (next == null) {
             Analysis analysis = analyze(account, session, model);
-            reply = join(notes) + (notes.isEmpty() ? "" : "\n\n") + summary(model, analysis);
+            String lead = aiReply == null ? "" : aiReply + "\n\n";
+            reply = lead + join(notes) + (notes.isEmpty() ? "" : "\n\n") + summary(model, analysis);
         } else {
-            String ask = aiReply != null ? aiReply : rules.question(model, next, suggestions);
+            // 되물을 만큼 되물었는데도 꼭 필요한 항목이 비어 있으면, 그 항목만 정해진 질문으로 콕 집어 묻는다.
+            boolean askedEnough = model.getFollowUps() != null && model.getFollowUps() >= MAX_FOLLOW_UPS;
+            String ask = aiReply != null && !askedEnough ? aiReply : rules.question(model, next, suggestions);
             reply = join(notes) + (notes.isEmpty() ? "" : "\n\n") + ask;
         }
         say(session, GoalMessage.ASSISTANT, reply.strip());
@@ -436,7 +475,21 @@ public class GoalService {
         }
 
         String[] recommendation = recommend(model, options, measuredCvr, limit);
-        Analysis analysis = new Analysis(econ, options, recommendation[0], recommendation[1], notes, LocalDateTime.now());
+
+        KeywordBidResearch.MarketCheck market = null;
+        PlanProposal basePlan = options.stream().map(Option::plan).filter(Objects::nonNull).findFirst().orElse(null);
+        try {
+            market = keywordResearch.research(accountService.scope(account).client(),
+                    keywordGroups(model, suggestions(account)),
+                    basePlan == null ? DEFAULT_CVR_PCT : basePlan.cvrPct(),
+                    basePlan == null ? "기본 가정값" : basePlan.cvrSource(), econ);
+        } catch (RuntimeException e) {
+            log.warn("키워드 입찰가 조사 실패: {}", e.getMessage());
+            notes.add("키워드별 입찰가를 조사하지 못했습니다. 네이버 연결을 확인한 뒤 '다시 검토'를 눌러 주세요.");
+        }
+        String solution = solution(model, econ, market, options, recommendation);
+        Analysis analysis = new Analysis(econ, options, recommendation[0], recommendation[1], notes, LocalDateTime.now(),
+                market, solution);
         session.analyzed(json(analysis));
         return analysis;
     }
@@ -502,13 +555,20 @@ public class GoalService {
     private String summary(BusinessModel model, Analysis a) {
         GoalEconomics.Result e = a.economics();
         StringBuilder sb = new StringBuilder("계산을 마쳤어요.\n");
-        sb.append(String.format("• 계약 1건 이익 %s × 계약 비율 %s%s → 문의 1건의 가치 %s\n", won(e.profitPerDeal()),
-                GoalEconomics.pct(e.leadToDealPct()),
-                e.dealsPerCustomer() > 1 ? " × " + GoalEconomics.trim(e.dealsPerCustomer())
-                        + (model.getRevenueModel() == BusinessModel.RevenueModel.SUBSCRIPTION ? "개월" : "회") : "",
-                won(e.valuePerLead())));
-        sb.append(String.format("• 그중 %s를 광고비로 쓰면 문의 1건에 %s까지 쓸 수 있습니다(목표 CPA). %s을 넘으면 광고할수록 손해예요.\n",
-                GoalEconomics.pct(model.getAdSharePct()), won(e.targetCpa()), won(e.breakEvenCpa())));
+        boolean subscription = model.getRevenueModel() == BusinessModel.RevenueModel.SUBSCRIPTION;
+        sb.append(String.format("• 문의 1건의 가치(첫 계약 기준): %s 이익 %s × 계약 비율 %s%s = %s\n",
+                subscription ? "월" : "계약 1건", won(e.profitPerDeal()), GoalEconomics.pct(e.leadToDealPct()),
+                subscription ? " × 유지 개월(최대 12)" : "", won(e.valuePerLead())));
+        sb.append(String.format("• 그중 %s를 광고비로 쓰면 목표 CPA %s · 손익분기 %s", GoalEconomics.pct(model.getAdSharePct()),
+                won(e.targetCpa()), won(e.breakEvenCpa())));
+        if (e.ltvCpa() > e.targetCpa()) {
+            sb.append(String.format(" · 재계약까지 친 상한 %s(참고용)", won(e.ltvCpa())));
+        }
+        sb.append('\n');
+        if (a.market() != null && a.market().marketCpa() > 0) {
+            sb.append(String.format("• 네이버 시세로 본 문의 1건 비용: 약 %s (키워드 %d개를 평균 3위로 걸 때, %s)\n",
+                    won(a.market().marketCpa()), a.market().keywords().size(), verdictLabel(a.market().verdict())));
+        }
         sb.append(String.format("• 목표를 채우려면 한 달에 계약 %,d건, 문의 %,d건이 필요합니다.\n\n", e.dealsNeeded(), e.leadsNeeded()));
         sb.append("네이버 검색량과 예상 클릭으로 따져 본 운영안:\n");
         for (Option o : a.options()) {
@@ -525,7 +585,93 @@ public class GoalService {
         } else {
             sb.append('\n').append(a.recommendReason());
         }
+        if (a.solution() != null && !a.solution().isBlank()) {
+            sb.append("\n\n").append(a.solution());
+        }
         return sb.toString();
+    }
+
+    /** 종합 제안. AI 가 있으면 서버 숫자만 넘겨 쓰게 하고, 없거나 실패하면 정해진 틀로 만든다. */
+    private String solution(BusinessModel model, GoalEconomics.Result econ, KeywordBidResearch.MarketCheck market,
+            List<Option> options, String[] recommendation) {
+        if (aiEnabled) {
+            Map<String, Object> facts = new LinkedHashMap<>();
+            facts.put("업종", model.getIndustry());
+            facts.put("고객층", model.getSegments());
+            facts.put("고민", model.getConcerns());
+            facts.put("상품", model.getOfferings());
+            facts.put("가정여부", model.hasAssumptions() ? "계산에 가정한 숫자가 들어 있음" : "모두 사장님이 알려 준 값");
+            Map<String, Object> economics = new LinkedHashMap<>();
+            economics.put("목표CPA_첫계약기준", econ.targetCpa());
+            economics.put("손익분기CPA", econ.breakEvenCpa());
+            economics.put("재계약포함_상한CPA", econ.ltvCpa());
+            economics.put("필요한_월계약", econ.dealsNeeded());
+            economics.put("필요한_월문의", econ.leadsNeeded());
+            facts.put("계산", economics);
+            if (market != null) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("시장예상CPA", market.marketCpa());
+                m.put("판정", verdictLabel(market.verdict()));
+                m.put("설명", market.explanation());
+                m.put("전환율_퍼센트", market.cvrPct());
+                m.put("키워드", market.keywords().stream().map(k -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("키워드", k.keyword());
+                    row.put("묶음", k.group());
+                    row.put("월검색량", k.monthlySearches());
+                    row.put("입찰가_1위", k.bid1());
+                    row.put("입찰가_3위", k.bid3());
+                    row.put("입찰가_5위", k.bid5());
+                    row.put("예상월클릭_3위", k.expectedClicks());
+                    row.put("예상월비용_3위", k.expectedCost());
+                    row.put("예상CPA", k.expectedCpa());
+                    row.put("판정", verdictLabel(k.verdict()));
+                    return row;
+                }).toList());
+                facts.put("네이버조사", m);
+            }
+            facts.put("운영안", options.stream().filter(o -> o.plan() != null).map(o -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("안", o.label());
+                row.put("월예산", o.monthlyBudget());
+                row.put("예상월문의", o.expectedLeads());
+                row.put("예상CPA", o.expectedCpa());
+                return row;
+            }).toList());
+            Option recommended = recommendation[0] == null ? null : find(options, recommendation[0]);
+            facts.put("추천안", recommended == null ? "없음" : recommended.label());
+            Optional<String> text = ai.solution(json(facts));
+            if (text.isPresent()) {
+                return text.get();
+            }
+        }
+        return ruleSolution(market);
+    }
+
+    /** AI 없이 만드는 종합 제안. 네이버 조사 결과만으로 진단·먼저 쓸 키워드·묶음을 보여 준다. */
+    static String ruleSolution(KeywordBidResearch.MarketCheck market) {
+        if (market == null || market.keywords().isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("■ 한 줄 진단\n• ").append(market.explanation()).append('\n');
+        sb.append("■ 먼저 쓸 키워드\n");
+        market.keywords().stream().filter(k -> k.bid3() > 0).limit(5).forEach(k -> sb.append(String.format(
+                "• %s: 3위 입찰가 %s · 예상 문의 1건 %s (%s)\n", k.keyword(), won(k.bid3()),
+                k.expectedCpa() > 0 ? won(k.expectedCpa()) : "예측 없음", verdictLabel(k.verdict()))));
+        Map<String, List<String>> byGroup = new LinkedHashMap<>();
+        market.keywords().forEach(k -> byGroup.computeIfAbsent(k.group(), g -> new ArrayList<>()).add(k.keyword()));
+        sb.append("■ 고객층·의도별 키워드 묶음\n");
+        byGroup.forEach((g, ks) -> sb.append("• ").append(g).append(": ").append(String.join(", ", ks)).append('\n'));
+        return sb.toString().strip();
+    }
+
+    static String verdictLabel(String verdict) {
+        return switch (verdict == null ? "" : verdict) {
+            case KeywordBidResearch.WITHIN -> "목표 이내";
+            case KeywordBidResearch.OVER_TARGET -> "첫 계약으론 초과";
+            case KeywordBidResearch.OVER_LTV -> "상한도 초과";
+            default -> "예측 없음";
+        };
     }
 
     /** 다 채운 뒤에 온 말. AI 가 있으면 고칠 내용을 읽어 다시 계산하고, 없으면 패널에서 고치도록 안내한다. */
@@ -537,9 +683,11 @@ public class GoalService {
                 BusinessModel updated = turn.get().model();
                 List<String> notes = new ArrayList<>();
                 applyUnknown(updated, turn.get().unknown(), suggestions, notes);
+                fillAssumptions(updated, suggestions, notes);
                 session.updateModel(json(updated));
                 if (updated.nextMissing() == null) {
-                    return "말씀하신 내용으로 다시 계산했습니다.\n\n" + summary(updated, analyze(account, session, updated));
+                    return "말씀하신 내용으로 다시 계산했습니다.\n\n" + (notes.isEmpty() ? "" : join(notes) + "\n\n")
+                            + summary(updated, analyze(account, session, updated));
                 }
                 return rules.question(updated, updated.nextMissing(), suggestions);
             }
@@ -549,6 +697,65 @@ public class GoalService {
         }
         return "계산 결과는 오른쪽에 정리돼 있어요. 고칠 숫자가 있으면 오른쪽 '사업 구조'에서 바로 고치실 수 있고, "
                 + "마음에 드는 안을 골라 '이 안으로 확정'을 누르시면 됩니다.";
+    }
+
+    /**
+     * 꼭 필요하지 않은 빈 항목을 묻지 않고 채운다. 숫자는 정해 둔 보수적인 가정으로, 키워드는 상담에서 나온 묶음 →
+     * 이 계정의 주력 키워드 → 상품 이름 순으로. 꼭 필요한 항목(업종·상품·매출·목표)이 비어 있으면 거기서 멈춘다.
+     */
+    private void fillAssumptions(BusinessModel model, List<String> suggestions, List<String> notes) {
+        Set<SlotType> fillable = Set.of(SlotType.OFFERING_PROFIT, SlotType.LEAD_TO_DEAL, SlotType.DEALS_PER_CUSTOMER,
+                SlotType.AD_SHARE, SlotType.BUDGET_LIMIT, SlotType.KEYWORDS);
+        for (int guard = 0; guard < 20; guard++) {
+            Slot next = model.nextMissing();
+            if (next == null || !fillable.contains(next.type())) {
+                return;
+            }
+            if (next.type() == SlotType.KEYWORDS) {
+                model.setSeedKeywords(defaultSeeds(model, suggestions));
+                if (model.getSeedKeywords().isEmpty()) {
+                    return;
+                }
+                continue;
+            }
+            RuleBasedInterviewer.Answer answer = rules.apply(model, next, "모름", suggestions);
+            if (!answer.understood()) {
+                return;
+            }
+            if (next.type() == SlotType.BUDGET_LIMIT) {
+                notes.add("한 달 광고비 상한은 말씀이 없어서 정해 두지 않고 계산했습니다.");
+            } else if (answer.note() != null) {
+                notes.add(answer.note());
+            }
+        }
+    }
+
+    private static List<String> defaultSeeds(BusinessModel model, List<String> suggestions) {
+        LinkedHashSet<String> seeds = new LinkedHashSet<>();
+        if (model.getKeywordGroups() != null) {
+            model.getKeywordGroups().forEach(g -> seeds.addAll(g.getKeywords()));
+        }
+        if (seeds.isEmpty()) {
+            seeds.addAll(suggestions);
+        }
+        if (seeds.isEmpty() && model.getOfferings() != null) {
+            model.getOfferings().forEach(o -> seeds.add(o.getName()));
+        }
+        return new ArrayList<>(seeds.stream().limit(5).toList());
+    }
+
+    /** 키워드 조사에 쓸 묶음. AI 가 묶음을 만들지 않았으면 핵심 키워드와 이 계정의 주력 키워드로 대신한다. */
+    private static List<BusinessModel.KeywordGroup> keywordGroups(BusinessModel model, List<String> suggestions) {
+        if (model.getKeywordGroups() != null && !model.getKeywordGroups().isEmpty()) {
+            return model.getKeywordGroups();
+        }
+        List<BusinessModel.KeywordGroup> groups = new ArrayList<>();
+        groups.add(new BusinessModel.KeywordGroup("핵심 키워드", model.getSeedKeywords()));
+        List<String> extra = suggestions.stream().filter(k -> !model.getSeedKeywords().contains(k)).toList();
+        if (!extra.isEmpty()) {
+            groups.add(new BusinessModel.KeywordGroup("지금 광고 중인 키워드", extra));
+        }
+        return groups;
     }
 
     /** AI 가 "모른다"고 표시한 항목을 정해진 가정으로 채운다. */

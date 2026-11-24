@@ -55,6 +55,18 @@ public class BusinessModel {
     /** 고객이 검색할 핵심 키워드 */
     private List<String> seedKeywords = new ArrayList<>();
 
+    /** 주 고객층. 예: 법인, 화물차 사업자, 저신용 개인. 키워드를 고객층별로 묶는 기준이 된다 */
+    private List<String> segments = new ArrayList<>();
+
+    /** 사용자가 말한 지금의 고민·상황을 한두 문장으로 추린 것. 종합 제안의 출발점 */
+    private String concerns;
+
+    /** 고객층 × 검색 의도로 묶은 키워드 후보. 입찰가 조사는 이 묶음을 기준으로 한다 */
+    private List<KeywordGroup> keywordGroups = new ArrayList<>();
+
+    /** AI 상담에서 빠진 항목을 되물은 횟수. 정해 둔 횟수를 넘으면 더 묻지 않고 가정으로 채운다 */
+    private Integer followUps;
+
     public enum RevenueModel {
         /** 직접 팔거나 빌려준다 */
         DIRECT,
@@ -78,6 +90,8 @@ public class BusinessModel {
         /** 계약 1건으로 실제로 남는 돈 */
         private Long profitPerDeal;
         private String profitSource;
+        /** 이 상품이 계약에서 차지하는 비중(%). 모든 상품에 있으면 평균을 비중대로 낸다 */
+        private Double sharePct;
 
         public Offering() {
         }
@@ -85,6 +99,50 @@ public class BusinessModel {
         public Offering(String name) {
             this.name = name;
         }
+    }
+
+    @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class KeywordGroup {
+        /** 예: 법인 · 견적 비교 */
+        private String name;
+        private List<String> keywords = new ArrayList<>();
+
+        public KeywordGroup() {
+        }
+
+        public KeywordGroup(String name, List<String> keywords) {
+            this.name = name;
+            this.keywords = keywords;
+        }
+    }
+
+    /**
+     * 계산을 시작하려면 사용자에게 꼭 들어야 하는 항목. 이것만 되묻고 나머지는 가정으로 채울 수 있다.
+     * 업종·돈 버는 방식·상품과 계약 1건 매출·목표.
+     */
+    public List<String> missingCritical() {
+        List<String> items = new ArrayList<>();
+        if (isBlank(industry)) {
+            items.add("industry");
+        }
+        if (revenueModel == null) {
+            items.add("revenueModel");
+        }
+        if (offerings == null || offerings.isEmpty()) {
+            items.add("offerings");
+        } else {
+            for (Offering o : offerings) {
+                if (o.getRevenuePerDeal() == null) {
+                    items.add("offerings[" + o.getName() + "].revenuePerDeal");
+                }
+            }
+        }
+        if (goalType == null || goalAmount == null) {
+            items.add("goalType+goalAmount");
+        }
+        return items;
     }
 
     /** 계산을 시작하기 전에 채워야 할 다음 항목. 다 채워졌으면 null. 묻는 순서도 이 순서다. */

@@ -17,8 +17,8 @@ import org.springframework.stereotype.Component;
 /**
  * 모델이 사람처럼 대화하면서 사업 구조를 채우게 한다.
  *
- * <p>모델에게 맡기는 일은 두 가지뿐이다. 사용자의 말에서 사업 구조 값을 읽어 내는 것과, 다음에 물을 말을 쉬운 말로 쓰는 것.
- * 예산·CPA·기대 성과 같은 숫자는 모델이 말하지 않는다. 서버가 계산해서 따로 보여 준다.
+ * <p>모델에게 맡기는 일은 세 가지다. 사용자의 긴 설명에서 사업 구조 값을 한꺼번에 읽어 내는 것, 빠진 것만 묶어서 묻는 것,
+ * 그리고 서버가 계산한 숫자로 종합 제안을 쓰는 것. 예산·CPA·기대 성과 같은 숫자는 모델이 만들지 않는다.
  * 모델이 돌려준 값은 범위를 검사한 뒤에만 받아들이고, 응답을 읽을 수 없으면 비워서 돌려준다(정해진 질문으로 이어 간다).
  */
 @Slf4j
@@ -29,29 +29,60 @@ public class AiInterviewer {
     private static final int HISTORY_LIMIT = 12;
 
     private static final String SYSTEM_PROMPT = """
-            너는 네이버 검색광고를 처음 하는 사장님을 돕는 상담원이다. 마케팅 용어를 쓰지 말고 쉬운 말로, 한 번에 한 가지만 묻는다.
-            목표는 광고 계산에 필요한 사업 구조를 채우는 것이다. 업종은 무엇이든 될 수 있다.
+            너는 네이버 검색광고를 처음 하는 사장님을 돕는 광고 상담원이다. 마케팅 용어 대신 쉬운 말을 쓴다.
+            일문일답으로 하나씩 캐묻지 않는다. 사장님이 편하게 길게 말한 내용에서 필요한 값을 한꺼번에 추려 내고,
+            꼭 필요한데 빠진 것만 한 번에 묶어서 묻는다. 업종은 무엇이든 될 수 있다.
 
             채울 항목(JSON 필드):
-            - industry: 업종 (사용자가 쓴 그대로)
+            - industry: 업종 (한 줄로 짧게 정리)
             - revenueModel: DIRECT(직접 판매·대여) | COMMISSION(중개 수수료) | SUBSCRIPTION(매달 정기 결제)
-            - offerings: [{name, revenuePerDeal(원, 계약 1건 매출. 수수료면 수수료, 정기 결제면 한 달 결제액), profitPerDeal(원, 실제로 남는 돈)}]
+            - offerings: [{name, revenuePerDeal(원, 계약 1건 매출. 수수료면 수수료, 정기 결제면 한 달 결제액),
+                           profitPerDeal(원, 실제로 남는 돈), sharePct(전체 계약 중 이 상품 비중 %)}]
             - leadToDealPct: 문의 100건 중 계약 건수(%)
             - dealsPerCustomer: 고객 1명이 계약하는 평균 횟수(재계약 포함, 1 이상). 정기 결제면 평균 유지 개월 수
             - goalType: REVENUE | PROFIT | DEALS | LEADS, goalAmount: 매출·이익이면 원, 계약·문의면 건수 (한 달 기준)
             - adSharePct: 계약 1건 이익 중 광고비로 쓸 비율(%)
             - budgetLimit: 한 달 광고비 상한(원). 상한이 없다고 하면 0
-            - seedKeywords: 고객이 네이버에서 검색할 말 1~5개
+            - segments: 주 고객층 목록 (예: ["법인", "화물차 사업자", "저신용 개인"])
+            - concerns: 사장님이 말한 지금 상황·고민을 한두 문장으로 추린 것
+            - keywordGroups: [{name: "고객층 · 검색 의도", keywords: [...]}] 3~6묶음, 묶음마다 키워드 2~4개
+            - seedKeywords: keywordGroups 중 가장 중요한 키워드 1~5개
 
-            규칙:
-            - 사용자가 말한 값만 채운다. 추측해서 채우지 않는다.
-            - 사용자가 모른다고 한 항목은 unknown 목록에 필드 이름을 넣는다. 서버가 보수적인 가정으로 채우고 사용자에게 알린다.
-            - 예산, CPA, 기대 문의·매출 같은 계산 결과는 절대 말하지 않는다. 그 숫자는 서버가 계산해서 화면에 따로 보여 준다.
-            - reply 에는 방금 들은 내용을 짧게 확인하고, "남은 항목" 중 이번에 채우지 못한 첫 항목을 쉬운 예시와 함께 묻는다.
-            - 남은 항목이 없으면 묻지 말고, 들은 내용을 확인만 한다.
+            키워드 규칙:
+            - "중고화물차"처럼 넓은 한 단어만 쓰지 않는다. 고객층과 검색 의도(견적·가격·조건·비교·승인·지역 등)를 붙인
+              구매 직전의 검색어를 고른다. 예: "법인 장기렌트 견적", "1톤 화물차 리스 조건", "저신용 장기렌트 승인".
+            - 사장님이 말한 고객층마다 묶음을 만든다. 사장님이 키워드를 직접 말하면 그것도 넣는다.
+
+            대화 규칙:
+            - 사용자가 말한 값만 채운다. 숫자를 추측해서 채우지 않는다. 키워드·고객층·고민은 말한 내용에서 정리해도 된다.
+            - 사용자가 모른다고 한 항목은 unknown 목록에 필드 이름을 넣는다. 서버가 보수적인 가정으로 채운다.
+            - 예산, CPA, 기대 문의·매출 같은 계산 결과는 절대 말하지 않는다. 그 숫자는 서버가 계산한다.
+            - reply: 먼저 들은 내용을 2~3줄로 정리해 보여 주고, "꼭 필요한데 빠진 항목"이 있으면 그것들을
+              한 메시지에 번호 목록으로 묶어 예시와 함께 묻는다(최대 3개). 나머지 빠진 항목은 묻지 말고
+              "모르시는 건 업종 평균으로 잡고 운영하면서 맞추겠다"고 한 줄로 알린다.
+            - 꼭 필요한데 빠진 항목이 없으면 묻지 말고 정리만 한 뒤 "이 내용으로 계산과 키워드 조사를 하겠다"고 말한다.
+            - 마크다운 기호(#, **, 표)는 쓰지 않는다. 목록은 "1)" 또는 "•" 로 쓴다.
             - 반드시 아래 JSON 하나만 출력한다. 다른 글을 붙이지 않는다.
             {"reply": "사용자에게 할 말", "model": {바뀐 항목만}, "unknown": ["필드 이름", ...]}
             """;
+
+    private static final String SOLUTION_PROMPT = """
+            너는 네이버 검색광고 컨설턴트다. 사장님의 사업 구조와 서버가 계산·조사한 숫자를 받아,
+            사장님이 바로 실행할 수 있는 종합 제안을 쓴다.
+
+            규칙:
+            - 숫자는 주어진 자료에 있는 것만 그대로 쓴다. 새 숫자를 만들거나 바꾸지 않는다. 자료에 없으면 숫자 없이 말한다.
+            - 쉬운 말로, 1,200자 안쪽으로 쓴다. 마크다운 기호(#, **, 표)는 쓰지 않는다.
+            - 아래 순서와 제목을 그대로 쓰고, 제목 줄은 "■ " 로 시작하고 내용은 "• " 목록으로 쓴다.
+            ■ 한 줄 진단 — 목표 CPA(첫 계약 기준)와 시장 예상 CPA 를 비교해 지금 상황을 한 문장으로.
+            ■ 고객층별 전략 — 고객층마다 어떤 키워드 묶음을, 몇 위 정도로(1·3·5위 입찰가 참고) 걸지.
+            ■ 먼저 쓸 키워드 — 판정이 '목표 이내'인 키워드부터 3~5개를 입찰가와 함께. 없으면 가장 싼 것부터 낮은 순위로.
+            ■ 예산 배분 — 추천 운영안의 한 달 예산을 기준으로 고객층별로 어떻게 나눌지(비율은 말해도 되지만 새 금액은 만들지 않는다).
+            ■ 전환을 올릴 방법 — 랜딩 페이지·상담 응대 등 문의 1건 비용을 낮출 실행 항목 2~3개.
+            ■ 첫 2주 할 일 — 체크리스트 3~4개.
+            - 결과는 제안 본문만 출력한다.
+            """;
+
 
     private final AiProvider aiProvider;
     private final ObjectMapper objectMapper;
@@ -80,13 +111,32 @@ public class AiInterviewer {
         }
     }
 
+    /**
+     * 서버가 계산한 숫자로 종합 제안을 쓴다. 숫자는 facts 에 있는 것만 쓰게 한다. 실패하면 비워서 돌려준다.
+     *
+     * @param facts 사업 구조와 계산·조사 결과를 담은 JSON
+     */
+    public Optional<String> solution(String facts) {
+        try {
+            String raw = aiProvider.generate(new AiRequest(SOLUTION_PROMPT, "자료:\n" + facts, null)).content();
+            String text = raw == null ? "" : raw.strip();
+            return text.isEmpty() ? Optional.empty() : Optional.of(text);
+        } catch (Exception e) {
+            log.warn("AI 종합 제안을 쓰지 못해 정해진 문장으로 대신합니다: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private String prompt(BusinessModel current, List<GoalMessage> history, String userText, Slot nextSlot,
             String hint) throws Exception {
         StringBuilder sb = new StringBuilder();
         sb.append("지금까지 채운 사업 구조:\n").append(objectMapper.writeValueAsString(current)).append("\n\n");
-        List<String> remaining = current.remainingItems();
-        sb.append("남은 항목(묻는 순서): ").append(remaining.isEmpty() ? "없음(모두 채움)" : String.join(", ", remaining))
-                .append("\n첫 항목을 묻는 기본 문장(참고): ").append(hint == null ? "" : hint).append("\n\n");
+        List<String> critical = current.missingCritical();
+        List<String> remaining = new ArrayList<>(current.remainingItems());
+        remaining.removeAll(critical);
+        sb.append("꼭 필요한데 빠진 항목: ").append(critical.isEmpty() ? "없음" : String.join(", ", critical)).append('\n')
+                .append("빠졌지만 가정으로 채울 수 있는 항목: ").append(remaining.isEmpty() ? "없음" : String.join(", ", remaining))
+                .append("\n\n");
         sb.append("최근 대화:\n");
         List<GoalMessage> recent = history.subList(Math.max(0, history.size() - HISTORY_LIMIT), history.size());
         for (GoalMessage m : recent) {
@@ -124,6 +174,7 @@ public class AiInterviewer {
                 }
                 Offering o = existing(m.getOfferings(), name);
                 positiveLong(node, "revenuePerDeal").ifPresent(o::setRevenuePerDeal);
+                percent(node, "sharePct").ifPresent(o::setSharePct);
                 positiveLong(node, "profitPerDeal").ifPresent(profit -> {
                     if (o.getRevenuePerDeal() == null || profit <= o.getRevenuePerDeal()) {
                         o.setProfitPerDeal(profit);
@@ -158,6 +209,24 @@ public class AiInterviewer {
         if (p.has("budgetLimit") && p.get("budgetLimit").isNumber() && p.get("budgetLimit").asLong() >= 0) {
             m.setBudgetLimit(p.get("budgetLimit").asLong());
         }
+        List<String> segments = strings(p.get("segments"), 6, 30);
+        if (!segments.isEmpty()) {
+            m.setSegments(segments);
+        }
+        text(p, "concerns", 300).ifPresent(m::setConcerns);
+        if (p.has("keywordGroups") && p.get("keywordGroups").isArray()) {
+            List<BusinessModel.KeywordGroup> groups = new ArrayList<>();
+            for (JsonNode node : p.get("keywordGroups")) {
+                String name = node.path("name").asText("").trim();
+                List<String> words = strings(node.get("keywords"), 5, 50);
+                if (!name.isEmpty() && !words.isEmpty() && groups.size() < 6) {
+                    groups.add(new BusinessModel.KeywordGroup(name.length() > 40 ? name.substring(0, 40) : name, words));
+                }
+            }
+            if (!groups.isEmpty()) {
+                m.setKeywordGroups(groups);
+            }
+        }
         if (p.has("seedKeywords") && p.get("seedKeywords").isArray()) {
             List<String> keywords = new ArrayList<>();
             p.get("seedKeywords").forEach(k -> {
@@ -171,6 +240,20 @@ public class AiInterviewer {
             }
         }
         return m;
+    }
+
+    private static List<String> strings(JsonNode array, int max, int maxLength) {
+        List<String> result = new ArrayList<>();
+        if (array == null || !array.isArray()) {
+            return result;
+        }
+        array.forEach(n -> {
+            String v = n.asText("").trim();
+            if (!v.isEmpty() && v.length() <= maxLength && result.size() < max && !result.contains(v)) {
+                result.add(v);
+            }
+        });
+        return result;
     }
 
     private static Offering existing(List<Offering> offerings, String name) {

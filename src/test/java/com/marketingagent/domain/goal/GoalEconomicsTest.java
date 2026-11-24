@@ -18,15 +18,18 @@ class GoalEconomicsTest {
 
         GoalEconomics.Result r = GoalEconomics.compute(m);
 
-        // 문의 1건의 가치 = 100,000 × 1.5 × 30% = 45,000. 목표 CPA = 45,000 × 30% = 13,500.
-        assertThat(r.valuePerLead()).isEqualTo(45_000);
-        assertThat(r.breakEvenCpa()).isEqualTo(45_000);
-        assertThat(r.targetCpa()).isEqualTo(13_500);
+        // 목표 CPA 는 첫 계약만 센다: 문의 1건의 가치 = 100,000 × 30% = 30,000, 목표 CPA = 30,000 × 30% = 9,000.
+        assertThat(r.valuePerLead()).isEqualTo(30_000);
+        assertThat(r.breakEvenCpa()).isEqualTo(30_000);
+        assertThat(r.targetCpa()).isEqualTo(9_000);
+        // 재계약 1.5회까지 친 값은 참고용 상한으로만 낸다: 100,000 × 1.5 × 30% × 30% = 13,500.
+        assertThat(r.ltvValuePerLead()).isEqualTo(45_000);
+        assertThat(r.ltvCpa()).isEqualTo(13_500);
         // 매출 2,100만원 ÷ 35만원 = 계약 60건 ÷ 30% = 문의 200건.
         assertThat(r.dealsNeeded()).isEqualTo(60);
         assertThat(r.leadsNeeded()).isEqualTo(200);
-        assertThat(r.budgetAtTargetCpa()).isEqualTo(200 * 13_500);
-        assertThat(r.basis()).extracting(GoalEconomics.Line::label).contains("문의 1건의 가치", "목표 CPA", "필요한 문의");
+        assertThat(r.budgetAtTargetCpa()).isEqualTo(200 * 9_000);
+        assertThat(r.basis()).extracting(GoalEconomics.Line::label).contains("문의 1건의 가치(첫 계약)", "목표 CPA(첫 계약 기준)", "필요한 문의");
     }
 
     /** 리스 중개: 계약 1건 수수료 80만원, 그중 60만원이 남음, 문의 20건 중 1건 계약. 계약 목표 10건. */
@@ -66,6 +69,47 @@ class GoalEconomicsTest {
 
         m.setAdSharePct(null);
         assertThatThrownBy(() -> GoalEconomics.compute(m)).isInstanceOf(IllegalStateException.class);
+    }
+
+    /** 리스 중개처럼 재계약이 몇 년 뒤에 생기는 사업: 재계약 4회가 목표 CPA 를 4배로 부풀리지 않는다. */
+    @Test
+    void keepsRepeatDealsOutOfTheTargetCpa() {
+        BusinessModel m = model(RevenueModel.COMMISSION, 1_500_000, 1_500_000, 10, 4, GoalType.REVENUE, 20_000_000, 30);
+        Offering second = new Offering("장기 리스");
+        second.setRevenuePerDeal(800_000L);
+        second.setProfitPerDeal(800_000L);
+        m.getOfferings().add(second);
+
+        GoalEconomics.Result r = GoalEconomics.compute(m);
+
+        assertThat(r.valuePerLead()).isEqualTo(115_000);     // 1,150,000 × 10%
+        assertThat(r.targetCpa()).isEqualTo(34_500);         // × 30%
+        assertThat(r.ltvCpa()).isEqualTo(138_000);           // × 4회 — 예전 계산의 목표 CPA
+        assertThat(r.basis()).extracting(GoalEconomics.Line::label).contains("장기 가치 기준 상한");
+    }
+
+    /** 판매 비중을 모두 알면 가중평균, 하나라도 모르면 단순 평균. */
+    @Test
+    void weightsOfferingsBySalesShareWhenKnown() {
+        BusinessModel m = model(RevenueModel.COMMISSION, 1_500_000, 1_500_000, 10, 1, GoalType.DEALS, 10, 30);
+        Offering second = new Offering("장기 리스");
+        second.setRevenuePerDeal(800_000L);
+        second.setProfitPerDeal(800_000L);
+        m.getOfferings().add(second);
+        m.getOfferings().get(0).setSharePct(20.0);
+        assertThat(GoalEconomics.compute(m).profitPerDeal()).isEqualTo(1_150_000);   // 비중 하나만 → 단순 평균
+
+        second.setSharePct(80.0);
+        assertThat(GoalEconomics.compute(m).profitPerDeal()).isEqualTo(940_000);     // 1.5M×20% + 0.8M×80%
+    }
+
+    /** 정기 결제는 첫 계약을 최대 12개월치로 본다. */
+    @Test
+    void capsSubscriptionFirstDealAtTwelveMonths() {
+        BusinessModel m = model(RevenueModel.SUBSCRIPTION, 50_000, 40_000, 20, 24, GoalType.DEALS, 10, 50);
+        GoalEconomics.Result r = GoalEconomics.compute(m);
+        assertThat(r.valuePerLead()).isEqualTo(96_000);      // 40,000 × 12 × 20%
+        assertThat(r.ltvValuePerLead()).isEqualTo(192_000);  // × 24개월
     }
 
     static BusinessModel model(RevenueModel revenueModel, long revenue, long profit, double leadToDeal, double repeat,

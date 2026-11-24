@@ -13,7 +13,8 @@ import { AdScopeBar } from '@/components/ads/AdScopeBar'
 import { apiMessage, goalApi } from '@/services/api'
 import { useAdScopeStore } from '@/store/adScopeStore'
 import type {
-  BusinessModel, GoalCheckinResult, GoalEconomicsResult, GoalKind, GoalOption, GoalView, ValueSource,
+  BusinessModel, GoalCheckinResult, GoalEconomicsResult, GoalKind, GoalMarketCheck, GoalOption, GoalView, KeywordVerdict,
+  ValueSource,
 } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -232,6 +233,8 @@ export function GoalPage() {
             </div>
           </div>
 
+          {view.analysis?.market && <MarketSection market={view.analysis.market} />}
+
           {view.analysis && (
             <OptionsSection
               view={view}
@@ -342,6 +345,7 @@ function ModelCard({ view, busy, onSave }: { view: GoalView; busy: boolean; onSa
                     <span>
                       {m.revenueModel === 'SUBSCRIPTION' ? '월 ' : '건당 '}{won(o.revenuePerDeal)}
                       {o.profitPerDeal != null && <span className="text-muted-foreground"> · 남는 돈 {won(o.profitPerDeal)}</span>}
+                      {o.sharePct != null && <span className="text-muted-foreground"> · 비중 {pct(o.sharePct)}</span>}
                     </span>
                   ) : null,
                   o.profitPerDeal != null ? o.profitSource : undefined,
@@ -357,6 +361,21 @@ function ModelCard({ view, busy, onSave }: { view: GoalView; busy: boolean; onSa
             {row('광고 목표', goalText(m))}
             {row('이익 중 광고비', m.adSharePct != null ? pct(m.adSharePct) : null, m.adShareSource)}
             {row('한 달 광고비 상한', m.budgetLimit == null ? null : m.budgetLimit === 0 ? '없음' : won(m.budgetLimit))}
+            {m.segments && m.segments.length > 0 && row('주 고객층', m.segments.join(' · '))}
+            {m.concerns && row('고민', m.concerns)}
+            {m.keywordGroups && m.keywordGroups.length > 0 && (
+              <div className="space-y-1.5 py-1.5 text-sm">
+                <span className="text-muted-foreground">키워드 묶음</span>
+                {m.keywordGroups.map((g) => (
+                  <div key={g.name}>
+                    <p className="text-xs font-medium">{g.name}</p>
+                    <div className="mt-0.5 flex flex-wrap gap-1">
+                      {g.keywords.map((k) => <Badge key={k} variant="outline" className="font-normal">{k}</Badge>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="py-1.5 text-sm">
               <span className="text-muted-foreground">핵심 키워드</span>
               <div className="mt-1 flex flex-wrap gap-1">
@@ -407,11 +426,13 @@ function EconomicsCard({ economics }: { economics: GoalEconomicsResult }) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">계산</CardTitle>
-        <CardDescription>목표 CPA {won(economics.targetCpa)} · 필요한 문의 월 {num(economics.leadsNeeded)}건</CardDescription>
+        <CardDescription>
+          목표 CPA(첫 계약 기준) {won(economics.targetCpa)} · 필요한 문의 월 {num(economics.leadsNeeded)}건
+        </CardDescription>
       </CardHeader>
       <CardContent className="divide-y">
         {economics.basis.map((line) => (
-          <div key={line.label} className={cn('py-2', line.label === '목표 CPA' && 'rounded-md bg-indigo-50 px-2 dark:bg-indigo-950/40')}>
+          <div key={line.label} className={cn('py-2', line.label.startsWith('목표 CPA') && 'rounded-md bg-indigo-50 px-2 dark:bg-indigo-950/40')}>
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="text-muted-foreground">{line.label}</span>
               <span className="flex items-center gap-1.5 font-semibold">
@@ -421,6 +442,105 @@ function EconomicsCard({ economics }: { economics: GoalEconomicsResult }) {
             <p className="mt-0.5 text-xs text-muted-foreground">{line.how}</p>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+const VERDICT: Record<KeywordVerdict, { label: string; className: string }> = {
+  WITHIN: { label: '목표 이내', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  OVER_TARGET: { label: '첫 계약으론 초과', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
+  OVER_LTV: { label: '상한도 초과', className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
+  UNKNOWN: { label: '예측 없음', className: 'bg-muted text-muted-foreground' },
+}
+
+function VerdictBadge({ verdict }: { verdict: KeywordVerdict }) {
+  const v = VERDICT[verdict] ?? VERDICT.UNKNOWN
+  return <span className={cn('whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium', v.className)}>{v.label}</span>
+}
+
+/** 목표 CPA 를 네이버 시세에 대 본 결과와 키워드별 입찰가. */
+function MarketSection({ market }: { market: GoalMarketCheck }) {
+  const tiles = [
+    {
+      label: '시장 예상 CPA',
+      value: market.marketCpa > 0 ? won(market.marketCpa) : '-',
+      hint: `네이버 3위 입찰가 · 전환율 ${pct(market.cvrPct)}(${market.cvrSource})`,
+      strong: true,
+    },
+    { label: '목표 CPA (첫 계약 기준)', value: won(market.targetCpa), hint: '재계약 빼고 지금 계약만으로 계산', strong: false },
+    { label: '손익분기', value: won(market.breakEvenCpa), hint: '이보다 비싸면 첫 계약만으로 손해', strong: false },
+    {
+      label: '장기 가치 기준 상한',
+      value: market.ltvCpa > market.targetCpa ? won(market.ltvCpa) : '-',
+      hint: '재계약까지 친 참고용 상한',
+      strong: false,
+    },
+  ]
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Target className="h-4 w-4 text-indigo-500" /> 시장 시세와 목표 CPA
+        </CardTitle>
+        <CardDescription>{market.explanation}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {tiles.map((t) => (
+            <div key={t.label} className={cn('rounded-md border p-3', t.strong && 'border-indigo-300 dark:border-indigo-800')}>
+              <p className="text-xs text-muted-foreground">{t.label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums">{t.value}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{t.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">키워드</th>
+                <th className="px-3 py-2 text-left font-medium">묶음</th>
+                <th className="px-3 py-2 text-right font-medium">월 검색량</th>
+                <th className="px-3 py-2 text-left font-medium">경쟁</th>
+                <th className="px-3 py-2 text-right font-medium">1위 입찰가</th>
+                <th className="px-3 py-2 text-right font-medium">3위 입찰가</th>
+                <th className="px-3 py-2 text-right font-medium">5위 입찰가</th>
+                <th className="px-3 py-2 text-right font-medium">예상 월 클릭</th>
+                <th className="px-3 py-2 text-right font-medium">예상 월 비용</th>
+                <th className="px-3 py-2 text-right font-medium">예상 CPA</th>
+                <th className="px-3 py-2 text-left font-medium">판정</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {market.keywords.map((k) => (
+                <tr key={k.keyword}>
+                  <td className="px-3 py-2 font-medium">{k.keyword}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{k.group}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{k.monthlySearches > 0 ? num(k.monthlySearches) : '-'}</td>
+                  <td className="px-3 py-2 text-xs">{k.competition}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{k.bid1 > 0 ? won(k.bid1) : '-'}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{k.bid3 > 0 ? won(k.bid3) : '-'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{k.bid5 > 0 ? won(k.bid5) : '-'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{k.expectedClicks > 0 ? num(k.expectedClicks) : '-'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{k.expectedCost > 0 ? won(k.expectedCost) : '-'}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{k.expectedCpa > 0 ? won(k.expectedCpa) : '-'}</td>
+                  <td className="px-3 py-2"><VerdictBadge verdict={k.verdict} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          입찰가는 모바일 평균 순위 기준 네이버 추정값, 예상 클릭·비용은 3위 입찰가로 받은 네이버 성과 예측(한 달)입니다.
+          예상 CPA = 예상 클릭 단가 ÷ 전환율.
+        </p>
+        {market.notes.length > 0 && (
+          <div className="space-y-1 text-xs text-amber-700 dark:text-amber-300">
+            {market.notes.map((n) => <p key={n}>{n}</p>)}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

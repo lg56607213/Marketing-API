@@ -594,6 +594,14 @@ export interface GoalOffering {
   /** 계약 1건으로 실제로 남는 돈 */
   profitPerDeal?: number
   profitSource?: ValueSource
+  /** 전체 계약 중 이 상품 비중(%) */
+  sharePct?: number
+}
+
+export interface GoalKeywordGroup {
+  /** 예: 법인 · 견적 */
+  name: string
+  keywords: string[]
 }
 
 /** 대화로 파악한 사업 구조. 업종을 정해 두지 않는다. */
@@ -613,6 +621,12 @@ export interface BusinessModel {
   /** 0 이면 상한 없음 */
   budgetLimit?: number
   seedKeywords: string[]
+  /** 주 고객층 */
+  segments?: string[]
+  /** 지금 상황·고민 요약 */
+  concerns?: string
+  /** 고객층 × 검색 의도로 묶은 키워드 */
+  keywordGroups?: GoalKeywordGroup[]
 }
 
 export interface EconomicsLine {
@@ -635,6 +649,43 @@ export interface GoalEconomicsResult {
   leadsNeeded: number
   budgetAtTargetCpa: number
   basis: EconomicsLine[]
+  /** 재계약까지 친 문의 1건의 가치 */
+  ltvValuePerLead: number
+  /** 재계약까지 친 참고용 CPA 상한 */
+  ltvCpa: number
+}
+
+/** WITHIN(목표 이내) · OVER_TARGET(첫 계약으론 초과) · OVER_LTV(상한도 초과) · UNKNOWN(예측 없음) */
+export type KeywordVerdict = 'WITHIN' | 'OVER_TARGET' | 'OVER_LTV' | 'UNKNOWN'
+
+/** 키워드 한 건의 네이버 시세. 클릭·비용은 3위 입찰가 기준 한 달 예상 */
+export interface GoalKeywordBid {
+  keyword: string
+  group: string
+  monthlySearches: number
+  competition: string
+  bid1: number
+  bid3: number
+  bid5: number
+  expectedClicks: number
+  expectedCost: number
+  expectedCpc: number
+  expectedCpa: number
+  verdict: KeywordVerdict
+}
+
+export interface GoalMarketCheck {
+  /** 키워드 전체를 3위로 걸 때 문의 1건 평균 비용 */
+  marketCpa: number
+  targetCpa: number
+  breakEvenCpa: number
+  ltvCpa: number
+  cvrPct: number
+  cvrSource: string
+  verdict: KeywordVerdict
+  explanation: string
+  keywords: GoalKeywordBid[]
+  notes: string[]
 }
 
 export interface GoalOption {
@@ -666,6 +717,8 @@ export interface GoalAnalysis {
   recommendReason: string
   notes: string[]
   analyzedAt: string
+  market: GoalMarketCheck | null
+  solution: string | null
 }
 
 export interface GoalMessage {

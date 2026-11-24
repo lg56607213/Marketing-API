@@ -102,16 +102,29 @@ class GoalConversationTest {
             assertThat(v.model().getSeedKeywords()).isNotEmpty().hasSizeLessThanOrEqualTo(5);
             GoalEconomics.Result e = v.economics();
             assertThat(e.profitPerDeal()).isEqualTo(230_000);
-            assertThat(e.valuePerLead()).isEqualTo(103_500);
-            assertThat(e.targetCpa()).isEqualTo(31_050);
+            // 첫 계약만 센다: 230,000 × 30% = 69,000. 재계약 1.5회는 장기 상한(103,500 × 30%)에만 쓴다.
+            assertThat(e.valuePerLead()).isEqualTo(69_000);
+            assertThat(e.ltvValuePerLead()).isEqualTo(103_500);
+            assertThat(e.ltvCpa()).isEqualTo(31_050);
+            assertThat(e.targetCpa()).isEqualTo(20_700);
             assertThat(e.dealsNeeded()).isEqualTo(39);
             assertThat(e.leadsNeeded()).isEqualTo(130);
-            assertThat(last(v)).contains("계산을 마쳤어요").contains("31,050원");
+            assertThat(last(v)).contains("계산을 마쳤어요").contains("20,700원");
 
             GoalDtos.Analysis analysis = v.analysis();
             assertThat(analysis.options()).isNotEmpty();
             assertThat(analysis.options()).extracting(Option::key).contains(GoalService.OPTION_GOAL);
             assertThat(analysis.recommended()).isNotNull();
+            // 키워드마다 1·3·5위 입찰가와 문의 1건 비용을 붙이고, 시장 시세를 목표 CPA 와 비교한다.
+            assertThat(analysis.market()).isNotNull();
+            assertThat(analysis.market().keywords()).isNotEmpty();
+            assertThat(analysis.market().keywords()).allSatisfy(k -> {
+                assertThat(k.bid1()).isGreaterThanOrEqualTo(k.bid3());
+                assertThat(k.bid3()).isGreaterThanOrEqualTo(k.bid5());
+            });
+            assertThat(analysis.market().marketCpa()).isPositive();
+            assertThat(analysis.solution()).contains("■ 한 줄 진단").contains("3위 입찰가");
+            assertThat(last(v)).contains("네이버 시세로 본 문의 1건 비용");
             Option chosen = analysis.options().stream().filter(o -> o.key().equals(analysis.recommended()))
                     .findFirst().orElseThrow();
             assertThat(chosen.plan()).isNotNull();
@@ -134,9 +147,9 @@ class GoalConversationTest {
             assertThat(planService.current(acc)).isPresent();
             var settings = autopilotService.settings(acc);
             assertThat(settings.enabled()).isFalse();
-            assertThat(settings.targetCpa()).isEqualTo(31_050);
+            assertThat(settings.targetCpa()).isEqualTo(20_700);
             assertThat(settings.monthlyBudgetCap()).isEqualTo(chosen.monthlyBudget());
-            assertThat(accountRepository.findById(acc).orElseThrow().getTargetCpa()).isEqualTo(31_050);
+            assertThat(accountRepository.findById(acc).orElseThrow().getTargetCpa()).isEqualTo(20_700);
             assertThat(last(confirmed)).contains("확정했습니다").contains("자동 운영은 꺼져");
 
             // 실제 결과: 문의 20건 중 10건 계약(50%). 처음 값 30% 와 섞어 40% 로 잡는다.
@@ -145,18 +158,18 @@ class GoalConversationTest {
             assertThat(result.measuredPct()).isEqualTo(50.0);
             assertThat(result.previousLeadToDealPct()).isEqualTo(30.0);
             assertThat(result.leadToDealPct()).isEqualTo(40.0);
-            assertThat(result.suggestedTargetCpa()).isEqualTo(41_400);
-            assertThat(result.appliedTargetCpa()).isEqualTo(31_050);
+            assertThat(result.suggestedTargetCpa()).isEqualTo(27_600);
+            assertThat(result.appliedTargetCpa()).isEqualTo(20_700);
             assertThat(result.message()).contains("바꾸시길 권합니다");
             assertThat(result.view().model().getLeadToDealSource()).isEqualTo(BusinessModel.SOURCE_MEASURED);
             assertThat(result.view().status()).isEqualTo(GoalSession.CONFIRMED);
             assertThat(result.view().checkins()).hasSize(1);
             // 제안만 하고 바로 바꾸지는 않는다.
-            assertThat(autopilotService.settings(acc).targetCpa()).isEqualTo(31_050);
+            assertThat(autopilotService.settings(acc).targetCpa()).isEqualTo(20_700);
 
             goalService.applyTarget(acc);
-            assertThat(autopilotService.settings(acc).targetCpa()).isEqualTo(41_400);
-            assertThat(accountRepository.findById(acc).orElseThrow().getTargetCpa()).isEqualTo(41_400);
+            assertThat(autopilotService.settings(acc).targetCpa()).isEqualTo(27_600);
+            assertThat(accountRepository.findById(acc).orElseThrow().getTargetCpa()).isEqualTo(27_600);
 
             // 계약이 문의보다 많을 수는 없다.
             assertThatThrownBy(() -> goalService.checkin(acc, new CheckinRequest(until, until, 3L, 5L, null)))
