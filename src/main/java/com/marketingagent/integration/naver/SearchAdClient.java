@@ -109,6 +109,14 @@ public interface SearchAdClient {
     /** 제외 키워드를 삭제한다. */
     void deleteRestrictedKeyword(String nccAdgroupId, String restrictedKeywordId);
 
+    /**
+     * 남은 광고비(비즈머니) 잔액. 조회할 수 없으면 -1.
+     * 이 잔액이 바닥나면 광고가 멈추므로 매일 보고 메일에 남은 일수와 함께 알린다.
+     */
+    default long bizmoneyBalance() {
+        return -1;
+    }
+
     /** 등록 요청용 키워드. bidAmt 가 null 이면 그룹 입찰가를 따른다. */
     record NewKeyword(String keyword, Long bidAmt) {}
 

@@ -22,6 +22,7 @@ import com.marketingagent.domain.ads.EfficiencyBidService.KeywordEfficiency;
 import com.marketingagent.domain.ads.EfficiencyBidService.Targets;
 import com.marketingagent.domain.ads.KeywordStatDailyRepository;
 import com.marketingagent.domain.ads.autopilot.AutopilotDtos.Action;
+import com.marketingagent.domain.ads.autopilot.AutopilotDtos.DelegationRequest;
 import com.marketingagent.domain.ads.autopilot.AutopilotDtos.RunResult;
 import com.marketingagent.domain.ads.autopilot.AutopilotDtos.Settings;
 import com.marketingagent.domain.ads.autopilot.AutopilotDtos.SettingsRequest;
@@ -91,13 +92,18 @@ public class AutopilotService {
     private final BidPolicyProperties policy;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate tx;
+    private final AutopilotGoals goals;
+    private final KeywordCurator keywordCurator;
 
     public AutopilotService(AutopilotSettingsRepository settingsRepository, AutopilotRunRepository runRepository,
             MarketingPlanRepository planRepository, EfficiencyBidService efficiencyBidService,
             BidRecommendationService bidService, BidRecommendationRepository recommendationRepository,
             KeywordStatDailyRepository statRepository, AdKeywordRepository keywordRepository,
             AdCampaignRepository campaignRepository, AdAccountService accountService, BidPolicyProperties policy,
-            ObjectMapper objectMapper, PlatformTransactionManager transactionManager) {
+            ObjectMapper objectMapper, PlatformTransactionManager transactionManager, AutopilotGoals goals,
+            KeywordCurator keywordCurator) {
+        this.goals = goals;
+        this.keywordCurator = keywordCurator;
         this.settingsRepository = settingsRepository;
         this.runRepository = runRepository;
         this.planRepository = planRepository;
@@ -146,10 +152,44 @@ public class AutopilotService {
         if (plan != null && plan.getTargetCpa() > 0) {
             return new Targets(plan.getTargetCpa(), roas, "운영 계획의 목표");
         }
+        // 초보 업체는 상담만 하고 제안안을 확정하지 않는 경우가 많다. 상담에서 계산한 목표를 그대로 쓴다.
+        long goalCpa = goals.of(scope.id()).targetCpa();
+        if (goalCpa > 0) {
+            return new Targets(goalCpa, roas, "목표 상담 결과");
+        }
         if (policy.targetCpa() > 0) {
             return new Targets(policy.targetCpa(), roas, "서버 설정");
         }
         return new Targets(0, roas, roas > 0 ? "자동 운영 설정" : "목표 없음");
+    }
+
+    /**
+     * 일임 범위를 바꾼다. 지켜보기를 켜면 오늘부터 {@code observeDays} 일 동안은 판단과 기록만 한다.
+     */
+    public Settings updateDelegation(Long accountId, DelegationRequest request) {
+        AccountScope scope = accountService.scope(accountId);
+        return tx.execute(status -> {
+            AutopilotSettings settings = settingsRepository.findByAdAccountId(scope.id())
+                    .orElseGet(() -> settingsRepository.save(new AutopilotSettings(scope.id())));
+            LocalDate observeUntil = request.observeDays() > 0
+                    ? LocalDate.now().plusDays(request.observeDays() - 1L) : null;
+            settings.updateDelegation(request.addKeywords(), request.addNegatives(), request.cleanupKeywords(),
+                    request.realtimeBids(), request.targetRank(), request.maxCpc(), observeUntil);
+            log.info("자동 운영 일임 범위 변경: 계정 {} 추가={} 제외={} 정리={} 실시간={} 순위={} 지켜보기={}", scope.id(),
+                    request.addKeywords(), request.addNegatives(), request.cleanupKeywords(), request.realtimeBids(),
+                    request.targetRank(), observeUntil);
+            return toDto(scope, settings);
+        });
+    }
+
+    /** 이 계정에서 지금 네이버에 반영하지 않고 기록만 하는지(서버 시험 모드 또는 지켜보기 기간). */
+    public boolean recordOnly(Long accountId) {
+        if (policy.dryRun()) {
+            return true;
+        }
+        return settingsRepository.findByAdAccountId(accountId)
+                .map(s -> s.isObserving(LocalDate.now()))
+                .orElse(false);
     }
 
     // --- 실행 ---
@@ -177,33 +217,49 @@ public class AutopilotService {
         List<Action> actions = new ArrayList<>();
         List<String> notes = new ArrayList<>();
         Targets targets = targets(scope.id());
-        String idle = preview ? STATUS_PREVIEW : policy.dryRun() ? STATUS_DRY_RUN : STATUS_APPLIED;
+        boolean observing = settings != null && settings.isObserving(LocalDate.now());
+        boolean dry = policy.dryRun() || observing;
+        String idle = preview ? STATUS_PREVIEW : dry ? STATUS_DRY_RUN : STATUS_APPLIED;
+        if (observing && !preview) {
+            notes.add(String.format("%s까지는 지켜보기 기간이라 판단과 기록만 하고 네이버에는 반영하지 않습니다.",
+                    settings.getObserveUntil()));
+        }
 
         Analysis analysis = null;
         try {
             analysis = efficiencyBidService.analyze(scope.id(), targets);
         } catch (BadRequestException e) {
-            notes.add("입찰가와 키워드는 건드리지 않았습니다. " + e.getMessage());
+            boolean realtime = settings == null || settings.isRealtimeBids();
+            notes.add("전환 효율로는 아직 판단하지 않았습니다. " + e.getMessage()
+                    + (realtime ? " 그동안은 실시간 입찰이 낮 동안 1시간마다 목표 순위에 맞춰 입찰가를 조정합니다." : ""));
         }
 
         Set<String> paused = new HashSet<>();
         if (analysis != null && pauseWasteful) {
-            pauseWasteful(scope, analysis, preview, idle, actions, notes, paused);
+            pauseWasteful(scope, analysis, preview, dry, idle, actions, notes, paused);
         }
         if (analysis != null && manageBids) {
-            adjustBids(scope, analysis, targets, preview, paused, actions, notes);
+            adjustBids(scope, analysis, targets, preview, observing, paused, actions, notes);
         }
         if (manageBudget) {
-            adjustBudget(scope, settings, targets, preview, idle, actions, notes);
+            adjustBudget(scope, settings, targets, preview, dry, idle, actions, notes);
         }
-        if (!manageBids && !manageBudget && !pauseWasteful) {
-            notes.add("맡긴 항목이 없습니다. 설정에서 입찰가·키워드 중지·일예산 중 하나 이상을 켜세요.");
+        // 키워드 추가·제외 키워드·정리. 판단은 업종을 아는 AI 가 하고, 하루 건수는 좁게 묶는다.
+        try {
+            keywordCurator.curate(scope, settings, preview, dry, idle, actions, notes);
+        } catch (RuntimeException e) {
+            log.error("자동 운영 키워드 관리 실패: 계정 {}", scope.id(), e);
+            notes.add("키워드 추가·제외·정리 중 오류가 나 이번에는 건너뛰었습니다: " + e.getMessage());
+        }
+        if (!manageBids && !manageBudget && !pauseWasteful && settings != null && !settings.isAddKeywords()
+                && !settings.isAddNegatives() && !settings.isCleanupKeywords() && !settings.isRealtimeBids()) {
+            notes.add("맡긴 항목이 없습니다. 설정에서 하나 이상을 켜세요.");
         }
 
-        String summary = summary(actions, preview);
-        RunResult draft = new RunResult(null, preview, policy.dryRun(), summary, actions, notes, LocalDateTime.now());
+        String summary = summary(actions, preview, dry);
+        RunResult draft = new RunResult(null, preview, dry, summary, actions, notes, LocalDateTime.now());
         AutopilotRun saved = tx.execute(status -> runRepository.save(
-                new AutopilotRun(scope.id(), LocalDate.now(), preview, policy.dryRun(), summary, toJson(draft))));
+                new AutopilotRun(scope.id(), LocalDate.now(), preview, dry, summary, toJson(draft))));
         log.info("자동 운영 {}: 계정 {} {}", preview ? "미리보기" : "실행", scope.id(), summary);
         return withId(draft, saved.getId());
     }
@@ -227,14 +283,14 @@ public class AutopilotService {
         List<Action> actions = runs.stream().flatMap(run -> run.actions().stream()).toList();
         List<String> notes = runs.stream().flatMap(run -> run.notes().stream()).distinct().toList();
         RunResult last = runs.get(runs.size() - 1);
-        return Optional.of(new RunResult(last.id(), false, last.dryRun(), summary(actions, false), actions, notes,
-                last.ranAt()));
+        return Optional.of(new RunResult(last.id(), false, last.dryRun(), summary(actions, false, last.dryRun()),
+                actions, notes, last.ranAt()));
     }
 
     // --- 단계 ---
 
-    private void pauseWasteful(AccountScope scope, Analysis analysis, boolean preview, String idle, List<Action> actions,
-            List<String> notes, Set<String> paused) {
+    private void pauseWasteful(AccountScope scope, Analysis analysis, boolean preview, boolean dry, String idle,
+            List<Action> actions, List<String> notes, Set<String> paused) {
         List<KeywordEfficiency> wasteful = analysis.keywords().stream()
                 .filter(k -> "중지 검토".equals(k.verdict()))
                 .toList();
@@ -252,7 +308,7 @@ public class AutopilotService {
             handled++;
             paused.add(k.nccKeywordId());
             String status = idle;
-            if (!preview && !policy.dryRun()) {
+            if (!preview && !dry) {
                 try {
                     scope.client().setKeywordPaused(keyword.getNccKeywordId(), keyword.getNccAdgroupId(), true);
                     tx.executeWithoutResult(s -> keywordRepository.findByAdAccountIdAndNccKeywordId(scope.id(), k.nccKeywordId())
@@ -269,14 +325,15 @@ public class AutopilotService {
         }
     }
 
-    private void adjustBids(AccountScope scope, Analysis analysis, Targets targets, boolean preview, Set<String> paused,
-            List<Action> actions, List<String> notes) {
-        if (preview) {
-            // 미리보기는 추천도 저장하지 않는다. 계산 결과만 보여 준다.
+    private void adjustBids(AccountScope scope, Analysis analysis, Targets targets, boolean preview, boolean observing,
+            Set<String> paused, List<Action> actions, List<String> notes) {
+        if (preview || observing) {
+            // 미리보기·지켜보기는 추천도 승인하지 않는다. 계산 결과만 남긴다.
+            String status = preview ? STATUS_PREVIEW : STATUS_DRY_RUN;
             analysis.keywords().stream()
                     .filter(k -> k.suggestedBid() != k.currentBid() && !paused.contains(k.nccKeywordId()))
                     .forEach(k -> actions.add(new Action("입찰가", k.keyword(), won(k.currentBid()),
-                            won(k.suggestedBid()), k.reason(), STATUS_PREVIEW)));
+                            won(k.suggestedBid()), k.reason(), status)));
             return;
         }
         List<BidRecommendation> recommendations = efficiencyBidService.generate(scope.id(), targets);
@@ -306,8 +363,8 @@ public class AutopilotService {
     }
 
     /** 이번 달 한도를 지키는 것이 먼저고, 올리는 것은 효율이 확인됐을 때만 한다. */
-    private void adjustBudget(AccountScope scope, AutopilotSettings settings, Targets targets, boolean preview, String idle,
-            List<Action> actions, List<String> notes) {
+    private void adjustBudget(AccountScope scope, AutopilotSettings settings, Targets targets, boolean preview,
+            boolean dry, String idle, List<Action> actions, List<String> notes) {
         long cap = monthlyCap(scope, settings);
         if (cap <= 0) {
             notes.add("한 달 광고비 한도가 정해져 있지 않아 일예산은 건드리지 않았습니다. 운영 계획을 받거나 설정에서 한도를 정하세요.");
@@ -369,7 +426,7 @@ public class AutopilotService {
                 continue;
             }
             String status = idle;
-            if (!preview && !policy.dryRun()) {
+            if (!preview && !dry) {
                 try {
                     long applied = scope.client().updateCampaignDailyBudget(campaign.getNccCampaignId(), after);
                     tx.executeWithoutResult(s -> campaignRepository.findByAdAccountIdAndNccCampaignId(scope.id(), campaign.getNccCampaignId())
@@ -399,35 +456,36 @@ public class AutopilotService {
         return SystemTask.active() ? SystemTask.SYSTEM_ACTOR : CurrentUser.id();
     }
 
-    private long monthlyCap(AccountScope scope, AutopilotSettings settings) {
+    /** 한 달 광고비 한도. 자동 운영 설정 → 운영 계획 → 목표 상담에서 말한 상한 순으로 찾는다. */
+    long monthlyCap(AccountScope scope, AutopilotSettings settings) {
         if (settings != null && settings.getMonthlyBudgetCap() > 0) {
             return settings.getMonthlyBudgetCap();
         }
-        return planRepository.findTopByAdAccountIdOrderByIdDesc(scope.id()).map(MarketingPlan::getMonthlyBudget).orElse(0L);
+        long planned = planRepository.findTopByAdAccountIdOrderByIdDesc(scope.id())
+                .map(MarketingPlan::getMonthlyBudget).orElse(0L);
+        return planned > 0 ? planned : goals.of(scope.id()).budgetLimit();
+    }
+
+    /** 한 달 광고비 한도. 리포트와 실시간 입찰이 쓴다. */
+    public long monthlyCap(Long accountId) {
+        AccountScope scope = accountService.scope(accountId);
+        return monthlyCap(scope, settingsRepository.findByAdAccountId(scope.id()).orElse(null));
     }
 
     // --- 보조 ---
 
-    private String summary(List<Action> actions, boolean preview) {
+    /** 조치 목록을 한 줄로. 실시간 입찰 기록에도 쓴다. */
+    static String summary(List<Action> actions, boolean preview, boolean dry) {
         if (actions.isEmpty()) {
             return preview ? "지금 실행해도 바꿀 것이 없습니다." : "바꾼 것이 없습니다.";
         }
-        long bids = actions.stream().filter(a -> "입찰가".equals(a.type())).count();
-        long pauses = actions.stream().filter(a -> "키워드 중지".equals(a.type())).count();
-        long budgets = actions.stream().filter(a -> "일예산".equals(a.type())).count();
         long failed = actions.stream().filter(a -> STATUS_FAILED.equals(a.status())).count();
+        java.util.Map<String, Long> counts = new java.util.LinkedHashMap<>();
+        actions.forEach(a -> counts.merge(a.type(), 1L, Long::sum));
         List<String> parts = new ArrayList<>();
-        if (bids > 0) {
-            parts.add("입찰가 " + bids + "건");
-        }
-        if (pauses > 0) {
-            parts.add("키워드 중지 " + pauses + "건");
-        }
-        if (budgets > 0) {
-            parts.add("일예산 " + budgets + "건");
-        }
+        counts.forEach((type, count) -> parts.add(type + " " + count + "건"));
         String tail = preview ? " 바꿀 예정입니다."
-                : policy.dryRun() ? " 바꾸려 했지만 서버가 시험 모드(dry-run)라 기록만 남겼습니다." : " 바꿨습니다.";
+                : dry ? " 바꾸려 했지만 시험 모드(기록만)라 네이버에는 반영하지 않았습니다." : " 바꿨습니다.";
         return String.join(", ", parts) + tail + (failed > 0 ? " 그중 " + failed + "건은 실패했습니다." : "");
     }
 
@@ -449,7 +507,11 @@ public class AutopilotService {
                 s == null || s.isManageBids(), s == null || s.isManageBudget(), s == null || s.isPauseWasteful(),
                 targets.targetCpa(), monthlyCap(scope, s), targets.source(), policy.dryRun(),
                 Math.round(policy.maxChangeRate() * 1000) / 10.0, policy.maxDailyApplies(), policy.minBid(),
-                policy.maxBid());
+                policy.maxBid(),
+                s == null || s.isAddKeywords(), s == null || s.isAddNegatives(), s == null || s.isCleanupKeywords(),
+                s == null || s.isRealtimeBids(), s != null ? s.getTargetRank() : 3, s != null ? s.getMaxCpc() : 0,
+                goals.maxCpc(scope.id(), s), s != null ? s.getObserveUntil() : null,
+                policy.dryRun() || (s != null && s.isObserving(LocalDate.now())));
     }
 
     private static String won(long amount) {

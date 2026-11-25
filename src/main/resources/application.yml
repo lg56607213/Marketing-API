@@ -15,6 +15,21 @@ spring:
     open-in-view: false
   flyway:
     enabled: ${FLYWAY_ENABLED:false}
+  # 매일 아침 보고 메일. MAIL_HOST 가 비어 있으면 메일을 보내지 않는다(화면의 테스트 발송은 이유를 알려 준다).
+  # 하이웍스: smtps.hiworks.com / 465 / SSL. 아이디는 보내는 주소 전체, 비밀번호는 메일 비밀번호(또는 앱 비밀번호)
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: ${MAIL_SSL:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 15000
+      mail.smtp.writetimeout: 15000
   h2:
     console:
       # 외부에 공개할 때는 반드시 false. DB 를 통째로 열어 주는 화면이다
@@ -43,6 +58,12 @@ jwt:
   expiration: ${JWT_EXPIRATION:86400000}
 
 app:
+  mail:
+    # 보고 메일의 보내는 사람. 비우면 MAIL_USERNAME 을 쓴다
+    from: ${MAIL_FROM:}
+    from-name: ${MAIL_FROM_NAME:마케팅 에이전트}
+  # 보고 메일의 "자세히 보기" 링크
+  public-url: ${APP_PUBLIC_URL:https://marketagent.co.kr}
   # DB에 저장하는 광고 API 비밀키를 암호화하는 키. 운영에서는 반드시 바꾸고, 바꾼 뒤에는 유지한다.
   # 예전 이름(CREDENTIAL_ENCRYPTION_KEY)으로 둔 값도 읽는다.
   encryption-key: ${APP_ENCRYPTION_KEY:${CREDENTIAL_ENCRYPTION_KEY:${jwt.secret}}}

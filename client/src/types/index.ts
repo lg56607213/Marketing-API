@@ -444,6 +444,39 @@ export interface AutopilotSettings extends AutopilotSettingsRequest {
   maxDailyApplies: number
   minBid: number
   maxBid: number
+  addKeywords: boolean
+  addNegatives: boolean
+  cleanupKeywords: boolean
+  realtimeBids: boolean
+  targetRank: number
+  /** 업체가 정한 클릭 1회 최대 금액. 0 이면 자동 */
+  maxCpc: number
+  /** 지금 실제로 쓰는 클릭 1회 최대 금액. 근거가 없으면 0 */
+  effectiveMaxCpc: number
+  observeUntil: string | null
+  /** 서버 시험 모드나 지켜보기 기간이라 네이버에 반영하지 않는 상태 */
+  recordOnly: boolean
+}
+
+/** 일임 범위 */
+export interface AutopilotDelegationRequest {
+  addKeywords: boolean
+  addNegatives: boolean
+  cleanupKeywords: boolean
+  realtimeBids: boolean
+  targetRank: number
+  maxCpc: number
+  /** 오늘부터 며칠 동안 기록만 할지. 0 이면 바로 반영 */
+  observeDays: number
+}
+
+/** 매일 아침 보고 메일 설정 */
+export interface ReportMailSettings {
+  enabled: boolean
+  recipients: string[]
+  lastSentOn: string | null
+  mailConfigured: boolean
+  sender: string
 }
 
 export interface AutopilotAction {

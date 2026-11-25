@@ -52,7 +52,36 @@ public final class AutopilotDtos {
             double maxChangeRatePct,
             int maxDailyApplies,
             long minBid,
-            long maxBid
+            long maxBid,
+            boolean addKeywords,
+            boolean addNegatives,
+            boolean cleanupKeywords,
+            boolean realtimeBids,
+            int targetRank,
+            /* 업체가 정한 클릭 1회 최대 금액. 0 이면 자동 */
+            long maxCpc,
+            /* 지금 실제로 쓰는 클릭 1회 최대 금액. 정할 근거가 없으면 0 */
+            long effectiveMaxCpc,
+            java.time.LocalDate observeUntil,
+            /* 서버 시험 모드나 지켜보기 기간이라 네이버에 반영하지 않는 상태인지 */
+            boolean recordOnly
+    ) {}
+
+    /**
+     * 일임 범위. 키워드 추가·제외·정리와 실시간 입찰을 켜고 끈다.
+     *
+     * @param targetRank  실시간 입찰이 노리는 평균 노출 순위(1~10)
+     * @param maxCpc      클릭 1회 최대 금액. 0 이면 목표 상담의 손익분기로 자동 계산
+     * @param observeDays 오늘부터 며칠 동안 판단과 기록만 할지. 0 이면 바로 반영
+     */
+    public record DelegationRequest(
+            boolean addKeywords,
+            boolean addNegatives,
+            boolean cleanupKeywords,
+            boolean realtimeBids,
+            @Min(1) @Max(10) int targetRank,
+            @Min(0) long maxCpc,
+            @Min(0) @Max(60) int observeDays
     ) {}
 
     /**

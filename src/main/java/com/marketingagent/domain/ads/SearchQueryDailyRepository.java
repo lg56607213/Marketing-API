@@ -14,6 +14,18 @@ public interface SearchQueryDailyRepository extends JpaRepository<SearchQueryDai
     Optional<SearchQueryDaily> findByAdAccountIdAndStatDateAndNccAdgroupIdAndSearchQueryAndDevice(
             Long adAccountId, LocalDate statDate, String nccAdgroupId, String searchQuery, String device);
 
+    /** 검색어 × 광고그룹별 합계. [검색어, 광고그룹, 노출, 클릭, 광고비] */
+    @Query("""
+            select s.searchQuery, s.nccAdgroupId, sum(s.impCnt), sum(s.clkCnt), sum(s.salesAmt)
+            from SearchQueryDaily s
+            where s.adAccountId = :accountId
+              and s.statDate between :since and :until
+            group by s.searchQuery, s.nccAdgroupId
+            order by sum(s.clkCnt) desc, sum(s.impCnt) desc
+            """)
+    List<Object[]> aggregateByQueryAndAdgroup(@Param("accountId") Long accountId,
+            @Param("since") LocalDate since, @Param("until") LocalDate until);
+
     @Query("""
             select new com.marketingagent.domain.ads.dto.SearchQueryAggregate(
                 s.searchQuery, sum(s.impCnt), sum(s.clkCnt), sum(s.salesAmt))

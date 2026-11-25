@@ -238,6 +238,12 @@ public class StubSearchAdClient implements SearchAdClient {
         return created;
     }
 
+    /** 예시 계정의 비즈머니 잔액. 보고 메일 미리보기가 그럴듯하게 보이도록 고정값을 준다. */
+    @Override
+    public long bizmoneyBalance() {
+        return 300_000;
+    }
+
     @Override
     public void deleteKeyword(String nccKeywordId) {
         overriddenBids.remove(scoped(nccKeywordId));

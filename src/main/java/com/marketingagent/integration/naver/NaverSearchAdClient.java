@@ -504,6 +504,20 @@ public class NaverSearchAdClient implements SearchAdClient {
         }
     }
 
+    /** 비즈머니 잔액. 응답: {"customerId":..., "bizmoney": 123456, "budgetLock": false, "refundLock": false} */
+    @Override
+    public long bizmoneyBalance() {
+        try {
+            Map<String, Object> body = get("/billing/bizmoney", "",
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            Object value = body.get("bizmoney");
+            return value instanceof Number n ? n.longValue() : -1;
+        } catch (RuntimeException e) {
+            log.warn("비즈머니 잔액 조회 실패: {}", e.getMessage());
+            return -1;
+        }
+    }
+
     /** 리포트 다운로드 URL 은 별도 경로라 서명 경로를 그 URL 의 path 로 잡는다. */
     private String getRaw(String url) {
         URI uri = URI.create(url);

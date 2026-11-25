@@ -35,6 +35,7 @@ public class AdSyncScheduler {
     private final SearchQueryService searchQueryService;
     private final AutopilotService autopilotService;
     private final BriefingService briefingService;
+    private final com.marketingagent.domain.ads.report.DailyReportService dailyReportService;
     private final AdAccountRepository accountRepository;
     private final NaverSearchAdProperties properties;
 
@@ -83,6 +84,12 @@ public class AdSyncScheduler {
             }
         } catch (Exception e) {
             log.error("브리핑 생성 실패: 계정 {} {}", label, e.getMessage());
+        }
+        // 마지막으로 대표에게 아침 보고 메일을 보낸다. 브리핑과 자동 운영 결과가 메일에 들어간다.
+        try {
+            dailyReportService.sendIfDue(id);
+        } catch (Exception e) {
+            log.error("보고 메일 발송 실패: 계정 {} {}", label, e.getMessage());
         }
     }
 }

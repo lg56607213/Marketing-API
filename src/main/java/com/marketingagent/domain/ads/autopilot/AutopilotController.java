@@ -30,6 +30,7 @@ public class AutopilotController {
 
     private final AutopilotService autopilotService;
     private final EfficiencyBidService efficiencyBidService;
+    private final RealtimeBidService realtimeBidService;
 
     @Operation(summary = "자동 운영 설정 조회")
     @GetMapping("/autopilot")
@@ -42,6 +43,20 @@ public class AutopilotController {
     @PutMapping("/autopilot")
     public ResponseEntity<ApiResponse<Settings>> update(@RequestParam Long accountId, @Valid @RequestBody SettingsRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(autopilotService.updateSettings(accountId, request)));
+    }
+
+    @Operation(summary = "일임 범위 변경 (키워드 추가·제외·정리, 실시간 입찰, 지켜보기 기간)")
+    @PutMapping("/autopilot/delegation")
+    public ResponseEntity<ApiResponse<Settings>> updateDelegation(@RequestParam Long accountId,
+            @Valid @RequestBody AutopilotDtos.DelegationRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(autopilotService.updateDelegation(accountId, request)));
+    }
+
+    @Operation(summary = "실시간 입찰 지금 실행 (preview=true 면 계산만)")
+    @PostMapping("/autopilot/realtime")
+    public ResponseEntity<ApiResponse<RunResult>> realtime(@RequestParam Long accountId,
+            @RequestParam(defaultValue = "true") boolean preview) {
+        return ResponseEntity.ok(ApiResponse.ok(realtimeBidService.run(accountId, preview)));
     }
 
     @Operation(summary = "자동 운영 실행",

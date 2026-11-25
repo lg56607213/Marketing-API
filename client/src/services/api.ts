@@ -9,6 +9,8 @@ import type {
   AutopilotRun,
   AutopilotSettings,
   AutopilotSettingsRequest,
+  AutopilotDelegationRequest,
+  ReportMailSettings,
   EfficiencyAnalysis,
   AuthResponse,
   BrandRequest,
@@ -294,6 +296,22 @@ export const autopilotApi = {
     http.post<ApiResponse<AutopilotRun>>('/ads/autopilot/run', null, { params: { ...account(), preview } }).then(unwrap),
   runs: () => http.get<ApiResponse<AutopilotRun[]>>('/ads/autopilot/runs', { params: account() }).then(unwrap),
   efficiency: () => http.get<ApiResponse<EfficiencyAnalysis>>('/ads/efficiency', { params: account() }).then(unwrap),
+  /** 일임 범위: 키워드 추가·제외·정리, 실시간 입찰, 지켜보기 기간 */
+  updateDelegation: (request: AutopilotDelegationRequest) =>
+    http.put<ApiResponse<AutopilotSettings>>('/ads/autopilot/delegation', request, { params: account() }).then(unwrap),
+  /** 실시간 입찰 지금 실행. preview=true 면 계산만 */
+  realtime: (preview: boolean) =>
+    http.post<ApiResponse<AutopilotRun>>('/ads/autopilot/realtime', null, { params: { ...account(), preview } }).then(unwrap),
+}
+
+// 매일 아침 광고 보고 메일
+export const reportMailApi = {
+  settings: () => http.get<ApiResponse<ReportMailSettings>>('/ads/report-mail', { params: account() }).then(unwrap),
+  update: (enabled: boolean, recipients: string[]) =>
+    http.put<ApiResponse<ReportMailSettings>>('/ads/report-mail', { enabled, recipients }, { params: account() }).then(unwrap),
+  preview: () =>
+    http.get<ApiResponse<{ subject: string; html: string }>>('/ads/report-mail/preview', { params: account() }).then(unwrap),
+  send: () => http.post<ApiResponse<string[]>>('/ads/report-mail/send', null, { params: account() }).then(unwrap),
 }
 
 // 목표 상담: 대화로 사업 구조를 파악하고 목표 CPA·예산을 정한다
