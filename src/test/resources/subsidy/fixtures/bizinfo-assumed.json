@@ -1,0 +1,24 @@
+{
+  "_note": "가정 샘플: 공개 문서·예시 코드의 필드명으로 만든 것. 인증키 발급 후 실제 응답(bizinfo-real.json)으로 바꾼다.",
+  "jsonArray": [
+    {
+      "pblancId": "PBLN_000000000100001",
+      "pblancNm": "[경기] 2027년 소상공인 온라인 마케팅 지원사업 공고",
+      "pblancUrl": "/web/lay1/bbs/S1T122C128/AS/74/view.do?pblancId=PBLN_000000000100001",
+      "jrsdInsttNm": "경기도",
+      "excInsttNm": "경기도경제과학진흥원",
+      "bsnsSumryCn": "<p>도내 소상공인의 온라인 판로 확대를 위해 광고비를 최대 300만원 지원</p>",
+      "reqstBeginEndDe": "2026-11-20 ~ 2099-12-31",
+      "trgetNm": "소상공인",
+      "hashtags": "경기,마케팅,소상공인"
+    },
+    {
+      "pblancId": "PBLN_000000000100002",
+      "pblancNm": "지난 공고",
+      "reqstBeginEndDe": "20200101 ~ 20200131"
+    },
+    {
+      "pblancNm": "ID 없는 줄은 버린다"
+    }
+  ]
+}

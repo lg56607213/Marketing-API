@@ -123,6 +123,21 @@ ads:
     # 이미 있는 것은 건너뛰므로 켜 둔 채 재시작해도 된다
     enabled: ${ADS_LAUNCH_ENABLED:false}
 
+subsidy:
+  # 정부지원사업 매칭. 매일 08:30 수집·분석, 09:00 매칭·알림
+  enabled: ${SUBSIDY_ENABLED:false}
+  bizinfo-key: ${BIZINFO_KEY:}
+  bizinfo-url: ${BIZINFO_URL:https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do}
+  data-go-kr-key: ${DATA_GO_KR_KEY:}
+  kstartup-url: ${KSTARTUP_URL:https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01}
+  extract-model: ${ANTHROPIC_MODEL_EXTRACT:claude-haiku-5-5}
+  judge-model: ${ANTHROPIC_MODEL_JUDGE:claude-sonnet-5-5}
+  max-analyze-per-day: ${SUBSIDY_MAX_ANALYZE_PER_DAY:200}
+  max-judge-per-profile: ${SUBSIDY_MAX_JUDGE_PER_PROFILE:5}
+  max-pages: ${SUBSIDY_MAX_PAGES:20}
+  collect-cron: ${SUBSIDY_COLLECT_CRON:0 30 8 * * *}
+  notify-cron: ${SUBSIDY_NOTIFY_CRON:0 0 9 * * *}
+
 google:
   searchconsole:
     # stub | google

@@ -37,6 +37,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
+                        // 메일 수신거부처럼 로그인 없이 서명으로만 확인하는 주소
+                        .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         // 나머지는 화면 파일(index.html, js, css)이다. 데이터는 모두 /api 뒤에 있다.
                         .anyRequest().permitAll()

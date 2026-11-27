@@ -1,0 +1,19 @@
+{
+  "_note": "가정 샘플: 공공데이터포털 15125364 공개 설명의 필드명으로 만든 것. 활용신청 후 실제 응답(kstartup-real.json)으로 바꾼다.",
+  "currentCount": 1,
+  "data": [
+    {
+      "pbanc_sn": 175000,
+      "biz_pbanc_nm": "2027년 예비창업패키지 예비창업자 모집 공고",
+      "pbanc_ntrp_nm": "창업진흥원",
+      "pbanc_ctnt": "혁신적인 기술창업 아이디어를 보유한 예비창업자에게 사업화 자금 최대 1억원 지원",
+      "aply_trgt_ctnt": "공고일 기준 사업자 등록이 없는 예비창업자",
+      "biz_enyy": "예비창업자",
+      "biz_trgt_age": "만 39세 이하",
+      "supt_regin": "전국",
+      "pbanc_rcpt_bgng_dt": "20261120",
+      "pbanc_rcpt_end_dt": "20991231",
+      "detl_pg_url": "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=175000"
+    }
+  ]
+}
