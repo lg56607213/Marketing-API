@@ -32,4 +32,6 @@ public interface SubsidyAnnouncementRepository extends JpaRepository<SubsidyAnno
     List<SubsidyAnnouncement> findSharedManual();
 
     long countByAnalyzedAtIsNull();
+
+    long countBySource(String source);
 }

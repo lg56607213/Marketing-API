@@ -11,6 +11,8 @@ import type {
   SubsidyProfile,
   SubsidyMatchItem,
   SubsidyStatus,
+  SubsidyManual,
+  SubsidySearchItem,
   KeywordProposalRequest,
   ProposalApplyRequest,
   AutopilotSettings,
@@ -271,6 +273,14 @@ export const subsidyApi = {
   matches: (id: number) => http.get<ApiResponse<SubsidyMatchItem[]>>(`/subsidy/profiles/${id}/matches`).then(unwrap),
   star: (matchId: number, value: boolean) => http.post(`/subsidy/matches/${matchId}/star`, null, { params: { value } }),
   status: () => http.get<ApiResponse<SubsidyStatus>>('/subsidy/admin/status').then(unwrap),
+  manual: () => http.get<ApiResponse<SubsidyManual[]>>('/subsidy/manual').then(unwrap),
+  createManual: (m: SubsidyManual) =>
+    http.post<ApiResponse<SubsidyManual>>('/subsidy/manual', m, { timeout: 180000 }).then(unwrap),
+  updateManual: (id: number, m: SubsidyManual) =>
+    http.put<ApiResponse<SubsidyManual>>(`/subsidy/manual/${id}`, m, { timeout: 180000 }).then(unwrap),
+  removeManual: (id: number) => http.delete(`/subsidy/manual/${id}`),
+  search: (params: { q?: string; profileId?: number; includeClosed?: boolean; hideNo?: boolean }) =>
+    http.get<ApiResponse<SubsidySearchItem[]>>('/subsidy/search', { params }).then(unwrap),
   run: (job: string) =>
     http.post<ApiResponse<string[]>>('/subsidy/admin/run', null, { params: { job }, timeout: 600000 }).then(unwrap),
 }

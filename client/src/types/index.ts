@@ -1030,3 +1030,41 @@ export interface SubsidyStatus {
   profiles: number
   recentRuns: { id: number; job: string; startedAt: string; finishedAt: string | null; status: string; detail: string | null }[]
 }
+
+export interface SubsidyManual {
+  id?: number
+  title: string
+  agency: string | null
+  supportType: string | null
+  amountText: string | null
+  targetText: string | null
+  regionText: string | null
+  applyStart: string | null
+  applyEnd: string | null
+  url: string | null
+  summary: string | null
+  shared: boolean
+  analyzed?: boolean
+}
+
+export interface SubsidySearchItem {
+  announcementId: number
+  title: string
+  agency: string | null
+  url: string | null
+  source: string
+  manual: boolean
+  applyStart: string | null
+  applyEnd: string | null
+  daysLeft: number | null
+  supportType: string | null
+  amountText: string | null
+  summary: string | null
+  targetText: string | null
+  regionText: string | null
+  hits: number
+  score: number | null
+  verdict: 'fit' | 'maybe' | 'no' | null
+  reasons: string[]
+  blockers: string[]
+}

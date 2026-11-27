@@ -12,6 +12,8 @@ import { apiMessage, subsidyApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import type { SubsidyMatchItem, SubsidyProfile, SubsidyStatus } from '@/types'
 import { cn } from '@/lib/utils'
+import { SubsidySearchPanel } from '@/features/subsidy/SubsidySearchPanel'
+import { SubsidyManualPanel } from '@/features/subsidy/SubsidyManualPanel'
 
 const SIDO = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
 const CERTS = ['벤처', '이노비즈', '메인비즈', '여성기업', '장애인기업', '사회적기업', '청년창업']
@@ -117,7 +119,7 @@ export function SubsidyPage() {
       <div>
         <h1 className="text-xl font-semibold">정부지원사업 맞춤 추천</h1>
         <p className="text-sm text-muted-foreground">
-          기업마당 · K-Startup 공고를 매일 아침 모아, 등록한 사업체 조건(지역 · 업력 · 업종 · 인증 등)에 맞는 지원사업과 정책자금을 골라 드립니다.
+          기업마당 · K-Startup · 판판대로 공고와 직접 등록한 사업을 매일 아침 모아, 등록한 사업체 조건(지역 · 업력 · 업종 · 인증 등)에 맞는 지원사업과 정책자금을 골라 드립니다.
         </p>
       </div>
 
@@ -132,81 +134,96 @@ export function SubsidyPage() {
         </div>
       )}
 
-      {/* 사업체 고르기 */}
-      <div className="flex flex-wrap items-center gap-2">
-        {profiles.map((p) => (
-          <Button
-            key={p.id}
-            size="sm"
-            variant={p.id === currentId ? 'default' : 'outline'}
-            onClick={() => { setCurrentId(p.id ?? null); setEditing(null) }}
-            className="gap-1.5"
-          >
-            <Building className="h-3.5 w-3.5" /> {p.name}
-            <span className="text-[10px] opacity-70">{p.entityType}</span>
-          </Button>
-        ))}
-        <Button size="sm" variant="ghost" className="gap-1" onClick={() => setEditing({ ...empty(), recipients: email ?? null })}>
-          <Plus className="h-3.5 w-3.5" /> 사업체 추가
-        </Button>
-      </div>
-
-      {editing ? (
-        <ProfileForm value={editing} onChange={setEditing} onSave={() => void save()} onCancel={() => setEditing(null)} busy={busy} />
-      ) : current ? (
-        <>
-          <Card>
-            <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
-              <span><b>{current.name}</b> · {current.entityType}</span>
-              <span className="text-muted-foreground">
-                {[current.regionSido, current.industryName, current.foundedDate && `개업 ${current.foundedDate}`]
-                  .filter(Boolean).join(' · ') || '지역·업종·개업일을 넣으면 더 정확해집니다'}
-              </span>
-              <div className="ml-auto flex gap-2">
-                <Button size="sm" variant="outline" className="gap-1" disabled={busy} onClick={() => void rematch()}>
-                  <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} /> 다시 판정
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditing(current)}>
-                  <Pencil className="h-3.5 w-3.5" /> 정보 수정
-                </Button>
-                <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => current.id && void remove(current.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Tabs defaultValue="fit">
-            <TabsList className="flex-wrap">
-              <TabsTrigger value="fit">신청 추천 ({fit.length})</TabsTrigger>
-              <TabsTrigger value="maybe">확인 필요 ({maybe.length})</TabsTrigger>
-              <TabsTrigger value="closing">마감 임박 ({closing.length})</TabsTrigger>
-              <TabsTrigger value="star">관심 ({starred.length})</TabsTrigger>
-              <TabsTrigger value="no">조건 불일치 ({no.length})</TabsTrigger>
-            </TabsList>
-            {(
-              [
-                ['fit', fit, '조건에 맞고 사업 내용과 관련 있는 공고입니다.'],
-                ['maybe', maybe, '자격은 걸리지 않지만 관련성이 약하거나, 사업체 정보가 비어 판단을 못 한 조건이 있는 공고입니다.'],
-                ['closing', closing, '7일 안에 마감되는 공고입니다.'],
-                ['star', starred, '관심 표시한 공고입니다. 마감 3일 전에 메일로 한 번 더 알려 드립니다.'],
-                ['no', no, '지역 · 업력 · 유형 등 조건이 맞지 않는 공고입니다. 자동 판정이 틀릴 수 있어 숨기지 않고 보여 드립니다.'],
-              ] as [string, SubsidyMatchItem[], string][]
-            ).map(([key, list, desc]) => (
-              <TabsContent key={key} value={key} className="mt-3 space-y-3">
-                <p className="text-xs text-muted-foreground">{desc}</p>
-                {list.length === 0 ? (
-                  <p className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                    아직 해당하는 공고가 없습니다. 공고는 매일 아침 8시 30분에 새로 모읍니다.
-                  </p>
-                ) : (
-                  list.map((m) => <MatchCard key={m.id} m={m} onStar={() => void toggleStar(m)} />)
-                )}
-              </TabsContent>
+      <Tabs defaultValue="recommend">
+        <TabsList>
+          <TabsTrigger value="recommend">맞춤 추천</TabsTrigger>
+          <TabsTrigger value="search">공고 검색</TabsTrigger>
+          <TabsTrigger value="manual">지원사업 직접 등록</TabsTrigger>
+        </TabsList>
+        <TabsContent value="recommend" className="mt-4 space-y-6">
+          {/* 사업체 고르기 */}
+          <div className="flex flex-wrap items-center gap-2">
+            {profiles.map((p) => (
+              <Button
+                key={p.id}
+                size="sm"
+                variant={p.id === currentId ? 'default' : 'outline'}
+                onClick={() => { setCurrentId(p.id ?? null); setEditing(null) }}
+                className="gap-1.5"
+              >
+                <Building className="h-3.5 w-3.5" /> {p.name}
+                <span className="text-[10px] opacity-70">{p.entityType}</span>
+              </Button>
             ))}
-          </Tabs>
-        </>
-      ) : null}
+            <Button size="sm" variant="ghost" className="gap-1" onClick={() => setEditing({ ...empty(), recipients: email ?? null })}>
+              <Plus className="h-3.5 w-3.5" /> 사업체 추가
+            </Button>
+          </div>
+
+          {editing ? (
+            <ProfileForm value={editing} onChange={setEditing} onSave={() => void save()} onCancel={() => setEditing(null)} busy={busy} />
+          ) : current ? (
+            <>
+              <Card>
+                <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
+                  <span><b>{current.name}</b> · {current.entityType}</span>
+                  <span className="text-muted-foreground">
+                    {[current.regionSido, current.industryName, current.foundedDate && `개업 ${current.foundedDate}`]
+                      .filter(Boolean).join(' · ') || '지역·업종·개업일을 넣으면 더 정확해집니다'}
+                  </span>
+                  <div className="ml-auto flex gap-2">
+                    <Button size="sm" variant="outline" className="gap-1" disabled={busy} onClick={() => void rematch()}>
+                      <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} /> 다시 판정
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditing(current)}>
+                      <Pencil className="h-3.5 w-3.5" /> 정보 수정
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => current.id && void remove(current.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Tabs defaultValue="fit">
+                <TabsList className="flex-wrap">
+                  <TabsTrigger value="fit">신청 추천 ({fit.length})</TabsTrigger>
+                  <TabsTrigger value="maybe">확인 필요 ({maybe.length})</TabsTrigger>
+                  <TabsTrigger value="closing">마감 임박 ({closing.length})</TabsTrigger>
+                  <TabsTrigger value="star">관심 ({starred.length})</TabsTrigger>
+                  <TabsTrigger value="no">조건 불일치 ({no.length})</TabsTrigger>
+                </TabsList>
+                {(
+                  [
+                    ['fit', fit, '조건에 맞고 사업 내용과 관련 있는 공고입니다.'],
+                    ['maybe', maybe, '자격은 걸리지 않지만 관련성이 약하거나, 사업체 정보가 비어 판단을 못 한 조건이 있는 공고입니다.'],
+                    ['closing', closing, '7일 안에 마감되는 공고입니다.'],
+                    ['star', starred, '관심 표시한 공고입니다. 마감 3일 전에 메일로 한 번 더 알려 드립니다.'],
+                    ['no', no, '지역 · 업력 · 유형 등 조건이 맞지 않는 공고입니다. 자동 판정이 틀릴 수 있어 숨기지 않고 보여 드립니다.'],
+                  ] as [string, SubsidyMatchItem[], string][]
+                ).map(([key, list, desc]) => (
+                  <TabsContent key={key} value={key} className="mt-3 space-y-3">
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                    {list.length === 0 ? (
+                      <p className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                        아직 해당하는 공고가 없습니다. 공고는 매일 아침 8시 30분에 새로 모읍니다.
+                      </p>
+                    ) : (
+                      list.map((m) => <MatchCard key={m.id} m={m} onStar={() => void toggleStar(m)} />)
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </>
+          ) : null}
+        </TabsContent>
+        <TabsContent value="search" className="mt-4">
+          <SubsidySearchPanel />
+        </TabsContent>
+        <TabsContent value="manual" className="mt-4">
+          <SubsidyManualPanel onChanged={() => currentId && void loadMatches(currentId)} />
+        </TabsContent>
+      </Tabs>
 
       {superAdmin && <AdminPanel />}
 
