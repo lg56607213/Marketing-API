@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SubsidyController {
 
     private final SubsidyProfileService profileService;
+    private final SubsidyCatalogService catalogService;
     private final SubsidyService subsidyService;
     private final SubsidyProperties properties;
     private final SubsidyAi ai;
@@ -79,6 +80,47 @@ public class SubsidyController {
     public ResponseEntity<ApiResponse<Void>> star(@PathVariable Long id, @RequestParam boolean value) {
         profileService.star(id, value);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- 지원사업 직접 등록 · 검색 ---
+
+    @Operation(summary = "직접 등록한 지원사업 목록 (내 업체 + 공용)")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/subsidy/manual")
+    public ResponseEntity<ApiResponse<List<SubsidyCatalogService.ManualView>>> manual() {
+        return ResponseEntity.ok(ApiResponse.ok(catalogService.listManual()));
+    }
+
+    @Operation(summary = "지원사업 직접 등록", description = "수집 대상이 아닌 사업을 넣는다. 넣는 즉시 자격요건을 분석하고 내 사업자를 다시 판정한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/api/subsidy/manual")
+    public ResponseEntity<ApiResponse<SubsidyCatalogService.ManualView>> createManual(
+            @RequestBody SubsidyCatalogService.ManualRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(catalogService.createManual(request)));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @PutMapping("/api/subsidy/manual/{id}")
+    public ResponseEntity<ApiResponse<SubsidyCatalogService.ManualView>> updateManual(@PathVariable Long id,
+            @RequestBody SubsidyCatalogService.ManualRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(catalogService.updateManual(id, request)));
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/api/subsidy/manual/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteManual(@PathVariable Long id) {
+        catalogService.deleteManual(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @Operation(summary = "지원사업 검색", description = "q=업무 말(공백·쉼표 여러 개), profileId=사업자 조건으로 판정. 둘 중 하나는 필요")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/api/subsidy/search")
+    public ResponseEntity<ApiResponse<List<SubsidyCatalogService.SearchItem>>> search(
+            @RequestParam(required = false) String q, @RequestParam(required = false) Long profileId,
+            @RequestParam(defaultValue = "false") boolean includeClosed,
+            @RequestParam(defaultValue = "false") boolean hideNo) {
+        return ResponseEntity.ok(ApiResponse.ok(catalogService.search(q, profileId, includeClosed, hideNo)));
     }
 
     // --- 관리자 ---

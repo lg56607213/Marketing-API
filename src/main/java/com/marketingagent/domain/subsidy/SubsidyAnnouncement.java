@@ -64,6 +64,11 @@ public class SubsidyAnnouncement extends BaseEntity {
 
     private LocalDateTime analyzedAt;
 
+    /** 직접 등록한 업체. null 이면 모두에게 보이는 공고(수집·관리자 공용 등록). */
+    private Long companyId;
+
+    private Long createdBy;
+
     public SubsidyAnnouncement(String source, String sourceId) {
         this.source = source;
         this.sourceId = sourceId;
@@ -87,6 +92,16 @@ public class SubsidyAnnouncement extends BaseEntity {
         if (changed) {
             this.analyzedAt = null;
         }
+    }
+
+    /** 직접 등록한 공고의 소유자. */
+    public void ownedBy(Long companyId, Long userId) {
+        this.companyId = companyId;
+        this.createdBy = userId;
+    }
+
+    public boolean isManual() {
+        return "manual".equals(source);
     }
 
     public void analyzed(String eligibilityJson, String aiSummary) {

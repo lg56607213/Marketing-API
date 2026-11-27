@@ -16,9 +16,20 @@ public interface SubsidyAnnouncementRepository extends JpaRepository<SubsidyAnno
             + "order by case when a.applyEnd is null then 1 else 0 end, a.applyEnd asc")
     List<SubsidyAnnouncement> findUnanalyzed(@Param("today") LocalDate today, Pageable page);
 
-    /** 매칭 대상: 마감 전이거나 마감일을 모르는 공고. */
+    /** 매칭 대상: 마감 전이거나 마감일을 모르는 공고 전부(업체 구분 없이). */
     @Query("select a from SubsidyAnnouncement a where a.applyEnd is null or a.applyEnd >= :today")
     List<SubsidyAnnouncement> findOpen(@Param("today") LocalDate today);
+
+    /** 이 업체가 볼 수 있는 공고: 공용 공고 + 이 업체가 직접 등록한 공고. */
+    @Query("select a from SubsidyAnnouncement a where (a.companyId is null or a.companyId = :companyId) "
+            + "and (:includeClosed = true or a.applyEnd is null or a.applyEnd >= :today)")
+    List<SubsidyAnnouncement> findVisible(@Param("companyId") Long companyId, @Param("today") LocalDate today,
+            @Param("includeClosed") boolean includeClosed);
+
+    List<SubsidyAnnouncement> findBySourceAndCompanyIdOrderByIdDesc(String source, Long companyId);
+
+    @Query("select a from SubsidyAnnouncement a where a.source = 'manual' and a.companyId is null order by a.id desc")
+    List<SubsidyAnnouncement> findSharedManual();
 
     long countByAnalyzedAtIsNull();
 }

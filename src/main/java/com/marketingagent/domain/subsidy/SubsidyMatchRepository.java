@@ -15,4 +15,8 @@ public interface SubsidyMatchRepository extends JpaRepository<SubsidyMatch, Long
     @Modifying
     @Query("delete from SubsidyMatch m where m.profileId = :profileId")
     void deleteByProfile(@Param("profileId") Long profileId);
+
+    @Modifying
+    @Query("delete from SubsidyMatch m where m.announcementId = :announcementId")
+    void deleteByAnnouncement(@Param("announcementId") Long announcementId);
 }

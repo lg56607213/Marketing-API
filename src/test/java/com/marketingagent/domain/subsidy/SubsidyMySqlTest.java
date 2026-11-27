@@ -54,4 +54,18 @@ class SubsidyMySqlTest {
         assertThat(matches.get(0).getReasons()).contains("관심 키워드");
         assertThat(announcementRepository.findById(a.getId()).orElseThrow().getAnalyzedAt()).isNotNull();
     }
+
+    @Test
+    void 직접_등록한_공고는_그_업체에만_보인다() {
+        SubsidyAnnouncement mine = new SubsidyAnnouncement("manual", "M-1");
+        mine.refresh(new SubsidyAnnouncement.Normalized("manual", "M-1", "신보 창업기업 보증", "신용보증기금", null, null,
+                "전국", null, null, null, null), "신보창업기업보증|-");
+        mine.ownedBy(77L, 1L);
+        announcementRepository.save(mine);
+
+        LocalDate today = LocalDate.now();
+        assertThat(announcementRepository.findVisible(77L, today, false)).extracting(SubsidyAnnouncement::getSourceId).contains("M-1");
+        assertThat(announcementRepository.findVisible(78L, today, false)).extracting(SubsidyAnnouncement::getSourceId).doesNotContain("M-1");
+        assertThat(announcementRepository.findBySourceAndCompanyIdOrderByIdDesc("manual", 77L)).hasSize(1);
+    }
 }

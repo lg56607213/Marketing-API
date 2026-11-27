@@ -165,7 +165,9 @@ public class SubsidyService {
     static List<SubsidyAnnouncement> representatives(List<SubsidyAnnouncement> all) {
         Map<String, SubsidyAnnouncement> byKey = new LinkedHashMap<>();
         for (SubsidyAnnouncement a : all) {
-            byKey.merge(a.getDedupeKey(), a, (x, y) -> rank(y) > rank(x) ? y : x);
+            // 업체가 직접 등록한 공고는 그 업체 안에서만 묶는다(다른 업체의 공용 공고를 가리지 않게)
+            String key = (a.getCompanyId() == null ? "" : a.getCompanyId()) + "#" + a.getDedupeKey();
+            byKey.merge(key, a, (x, y) -> rank(y) > rank(x) ? y : x);
         }
         return new ArrayList<>(byKey.values());
     }
@@ -174,8 +176,12 @@ public class SubsidyService {
         return (a.getEligibilityJson() != null ? 2 : 0) + (a.getTargetText() != null ? 1 : 0);
     }
 
-    private int matchProfile(SubsidyProfile p, List<SubsidyAnnouncement> open) {
+    private int matchProfile(SubsidyProfile p, List<SubsidyAnnouncement> allOpen) {
         LocalDate today = LocalDate.now();
+        // 다른 업체가 직접 등록한 공고는 보지 않는다
+        List<SubsidyAnnouncement> open = allOpen.stream()
+                .filter(a -> a.getCompanyId() == null || a.getCompanyId().equals(p.getCompanyId()))
+                .toList();
         EligibilityMatcher.ProfileFacts facts = facts(p);
         record Scored(SubsidyAnnouncement a, EligibilityMatcher.Result r) {}
         List<Scored> scored = new ArrayList<>();
