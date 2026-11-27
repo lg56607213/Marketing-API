@@ -19,6 +19,7 @@ import java.util.List;
  * @param ads          텍스트 소재(제목 15자·설명 45자 이내)
  * @param analysis     있으면 키워드 분석·제안의 추천안으로 키워드와 입찰가를 정한다
  * @param monthlyBudget 분석에 쓸 한 달 광고비. 없으면 캠페인 하루 예산 × 30
+ * @param saveEconomics false 면 캠페인의 손익 기준을 저장하지 않는다(같은 캠페인에 다른 상품 그룹을 더할 때). 기본 true
  * @param prune        false 면 그룹에 있던 키워드 중 추천에 없는 것을 지우지 않는다(기존 그룹용). 기본 true
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -36,7 +37,8 @@ public record LaunchPlan(
         List<TextAd> ads,
         Analysis analysis,
         Long monthlyBudget,
-        Boolean prune
+        Boolean prune,
+        Boolean saveEconomics
 ) {
     /**
      * 키워드를 데이터로 고르는 기준. 있으면 keywords 는 후보로만 쓰고, 넣을 키워드와 입찰가는 분석 결과로 정한다.

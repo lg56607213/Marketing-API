@@ -107,7 +107,7 @@ public class AdLaunchService {
 
         // 1) 광고그룹: 같은 이름이 있으면 그대로 쓴다
         String adgroupId = client.listAdgroups(campaign.nccCampaignId()).stream()
-                .filter(g -> plan.adgroupName().equals(g.name()))
+                .filter(g -> g.name() != null && plan.adgroupName().trim().equals(g.name().trim()))
                 .map(NccAdgroup::nccAdgroupId)
                 .findFirst().orElse(null);
         if (adgroupId == null) {
@@ -115,6 +115,11 @@ public class AdLaunchService {
                 actions.add(new Action(TYPE_ADGROUP, plan.adgroupName(), "없음", "만들 예정",
                         "캠페인 " + campaign.name() + " / 연결 " + plan.landingUrl(), idle));
                 notes.add("서버가 기록만 하는 상태라 네이버에는 만들지 않았습니다.");
+                return finish(scope.id(), dry, actions, notes);
+            }
+            if (plan.siteUrl() == null || plan.siteUrl().isBlank()) {
+                notes.add("광고그룹 '" + plan.adgroupName() + "'이 캠페인 " + campaign.name()
+                        + "에 없고, 사이트 주소가 없어 새로 만들지 않았습니다.");
                 return finish(scope.id(), dry, actions, notes);
             }
             BusinessChannel channel = siteChannel(client, plan, notes);
@@ -253,6 +258,9 @@ public class AdLaunchService {
             } catch (RuntimeException e) {
                 log.error("새 광고 시작 후 동기화 실패(다음 일 배치에서 다시 받습니다)", e);
             }
+        }
+        if (Boolean.FALSE.equals(plan.saveEconomics())) {
+            return finish(scope.id(), dry, actions, notes);
         }
         tx.executeWithoutResult(s -> campaignRepository.findByAdAccountIdAndNccCampaignId(scope.id(), nccCampaignId)
                 .ifPresentOrElse(c -> c.changeEconomics(plan.breakEvenCpa(), plan.maxCpc(), plan.businessNote()),

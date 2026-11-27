@@ -1,12 +1,12 @@
 {
   "accountId": 2,
-  "campaignName": "Mytruck",
+  "campaignName": "Onlycartalk",
   "adgroupName": "저신용자",
   "breakEvenCpa": 165000,
   "maxCpc": null,
   "monthlyBudget": 600000,
   "prune": false,
-  "businessNote": "마이트럭: 1톤 포터·봉고, 탑차·냉동탑차·윙바디 등 화물차 신차·중고 리스와 렌트. 저신용자(연체·개인회생·신용불량)도 가능한 화물차 상품이 있다. 레이·승용차 장기렌트와는 다른 사이트다.",
+  "businessNote": null,
   "keywords": [
     "저신용자포터",
     "저신용포터",
@@ -70,5 +70,6 @@
     "assumedCvr": 0.02,
     "maxKeywords": 15,
     "maxCandidates": 60
-  }
+  },
+  "saveEconomics": false
 }
