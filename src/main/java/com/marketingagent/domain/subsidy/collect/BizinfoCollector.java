@@ -95,15 +95,33 @@ public class BizinfoCollector implements AnnouncementCollector {
         String period = Fields.text(n, "reqstBeginEndDe", "reqstDt", "applyPeriod");
         String agency = Fields.text(n, "jrsdInsttNm", "author", "excInsttNm");
         String exec = Fields.text(n, "excInsttNm");
-        if (exec != null && agency != null && !exec.equals(agency)) {
+        // "기초자치단체"·"광역자치단체"는 기관 이름이 아니라 분류라서 붙이지 않는다
+        if (exec != null && agency != null && !exec.equals(agency) && !exec.endsWith("자치단체")) {
             agency = agency + " / " + exec;
         }
         String region = Fields.text(n, "hashtags", "hashTags");
-        String target = Fields.text(n, "trgetNm", "trgetNmCn", "target");
-        String summary = Fields.text(n, "bsnsSumryCn", "description", "bsnsSumry");
+        String realm = join(" > ", Fields.text(n, "pldirSportRealmLclasCodeNm"), Fields.text(n, "pldirSportRealmMlsfcCodeNm"));
+        String target = join(" / ", Fields.text(n, "trgetNm", "trgetNmCn", "target"), realm != null ? "분야: " + realm : null);
+        String how = Fields.text(n, "reqstMthPapersCn");
+        String contact = Fields.text(n, "refrncNm");
+        String summary = join(" / ", Fields.text(n, "bsnsSumryCn", "description", "bsnsSumry"),
+                how != null ? "신청 방법: " + how : null, contact != null ? "문의: " + contact : null);
         String url = Fields.absolute(Fields.text(n, "pblancUrl", "link", "url"), SITE);
         return new Normalized(SOURCE, id, title, agency, summary, target, region,
                 Fields.date(period, 0), Fields.date(period, 1), url, n.toString());
+    }
+
+    private static String join(String sep, String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p != null) {
+                if (!sb.isEmpty()) {
+                    sb.append(sep);
+                }
+                sb.append(p);
+            }
+        }
+        return sb.isEmpty() ? null : sb.toString();
     }
 
     private static String enc(String v) {

@@ -38,6 +38,27 @@ class CollectorNormalizeTest {
     }
 
     @Test
+    void 기업마당_실제_응답_샘플의_필드를_빠짐없이_읽는다() throws Exception {
+        BizinfoCollector c = new BizinfoCollector(props, om);
+        var items = om.readTree(fixture("bizinfo-real.json")).path("jsonArray");
+        assertThat(items.size()).isEqualTo(5);
+
+        Normalized first = c.normalize(items.get(0));
+        assertThat(first.sourceId()).isEqualTo("PBLN_000000000128177");
+        assertThat(first.title()).contains("청년창업농");
+        assertThat(first.agency()).isEqualTo("경상남도"); // "기초자치단체"는 붙이지 않는다
+        assertThat(first.applyStart()).isEqualTo(LocalDate.of(2026, 11, 24));
+        assertThat(first.applyEnd()).isEqualTo(LocalDate.of(2026, 12, 22));
+        assertThat(first.url()).startsWith("https://www.bizinfo.go.kr/");
+        assertThat(first.regionText()).contains("경남");
+        assertThat(first.targetText()).contains("창업벤처").contains("분야: 창업 > 사업화지원");
+        assertThat(first.summary()).doesNotContain("<p>").contains("신청 방법").contains("문의");
+
+        Normalized third = c.normalize(items.get(2));
+        assertThat(third.agency()).isEqualTo("경기도 / 경기도경제과학진흥원");
+    }
+
+    @Test
     void K스타트업_응답을_공통모양으로_바꾼다() throws Exception {
         List<Normalized> rows = new KstartupCollector(props, om).parse(fixture("kstartup-assumed.json"));
 
