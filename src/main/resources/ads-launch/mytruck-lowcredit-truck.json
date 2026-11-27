@@ -1,0 +1,74 @@
+{
+  "accountId": 2,
+  "campaignName": "Mytruck",
+  "adgroupName": "저신용자",
+  "breakEvenCpa": 165000,
+  "maxCpc": null,
+  "monthlyBudget": 600000,
+  "prune": false,
+  "businessNote": "마이트럭: 1톤 포터·봉고, 탑차·냉동탑차·윙바디 등 화물차 신차·중고 리스와 렌트. 저신용자(연체·개인회생·신용불량)도 가능한 화물차 상품이 있다. 레이·승용차 장기렌트와는 다른 사이트다.",
+  "keywords": [
+    "저신용자포터",
+    "저신용포터",
+    "저신용봉고",
+    "저신용화물차"
+  ],
+  "ads": [],
+  "analysis": {
+    "hints": [
+      "저신용포터",
+      "저신용봉고",
+      "저신용화물차",
+      "신용불량자화물차",
+      "개인회생화물차",
+      "저신용자포터",
+      "저신용1톤트럭",
+      "신불자화물차"
+    ],
+    "requireAny": [
+      "포터",
+      "봉고",
+      "화물",
+      "1톤",
+      "트럭",
+      "탑차"
+    ],
+    "focusAny": [
+      "저신용",
+      "신용불량",
+      "신불",
+      "회생",
+      "파산",
+      "연체"
+    ],
+    "excludeWords": [
+      "기사",
+      "구인",
+      "일자리",
+      "지입",
+      "운송",
+      "용달",
+      "이사",
+      "수리",
+      "매입",
+      "폐차",
+      "대출",
+      "시세"
+    ],
+    "audienceTerms": [
+      "저신용",
+      "신용불량",
+      "신불",
+      "회생",
+      "파산",
+      "연체"
+    ],
+    "productTerms": [],
+    "audienceWeight": 1.5,
+    "productWeight": 1.3,
+    "minMonthlySearches": 20,
+    "assumedCvr": 0.02,
+    "maxKeywords": 15,
+    "maxCandidates": 60
+  }
+}

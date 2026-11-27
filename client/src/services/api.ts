@@ -7,6 +7,9 @@ import type {
   OnboardingProfile,
   OnboardingProposal,
   AutopilotRun,
+  KeywordProposal,
+  KeywordProposalRequest,
+  ProposalApplyRequest,
   AutopilotSettings,
   AutopilotSettingsRequest,
   AutopilotDelegationRequest,
@@ -240,6 +243,18 @@ export const keywordToolApi = {
   removeRestricted: (nccAdgroupId: string, id: string) =>
     http.delete(`/ads/keywords/restricted/${id}`, { params: { ...account(), nccAdgroupId } }),
   adgroups: () => http.get<ApiResponse<AdGroupSummary[]>>('/ads/adgroups', { params: scope() }).then(unwrap),
+}
+
+// 키워드 분석·제안: 분석은 네이버를 바꾸지 않고, 적용은 표에서 고른 것만 반영한다
+export const keywordProposalApi = {
+  analyze: (request: KeywordProposalRequest) =>
+    http
+      .post<ApiResponse<KeywordProposal>>('/ads/keyword-proposals/analyze', request, { params: account(), timeout: 120000 })
+      .then(unwrap),
+  apply: (request: ProposalApplyRequest) =>
+    http
+      .post<ApiResponse<AutopilotRun>>('/ads/keyword-proposals/apply', request, { params: account(), timeout: 120000 })
+      .then(unwrap),
 }
 
 // 유입 검색어 리포트

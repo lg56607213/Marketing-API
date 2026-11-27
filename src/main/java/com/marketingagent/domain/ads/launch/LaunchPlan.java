@@ -17,6 +17,9 @@ import java.util.List;
  * @param businessNote 키워드 판단에 쓸 이 캠페인의 상품·고객 설명
  * @param keywords     시작 키워드
  * @param ads          텍스트 소재(제목 15자·설명 45자 이내)
+ * @param analysis     있으면 키워드 분석·제안의 추천안으로 키워드와 입찰가를 정한다
+ * @param monthlyBudget 분석에 쓸 한 달 광고비. 없으면 캠페인 하루 예산 × 30
+ * @param prune        false 면 그룹에 있던 키워드 중 추천에 없는 것을 지우지 않는다(기존 그룹용). 기본 true
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record LaunchPlan(
@@ -31,7 +34,9 @@ public record LaunchPlan(
         String businessNote,
         List<String> keywords,
         List<TextAd> ads,
-        Analysis analysis
+        Analysis analysis,
+        Long monthlyBudget,
+        Boolean prune
 ) {
     /**
      * 키워드를 데이터로 고르는 기준. 있으면 keywords 는 후보로만 쓰고, 넣을 키워드와 입찰가는 분석 결과로 정한다.

@@ -13,6 +13,7 @@ import { AdReportPage } from '@/pages/analytics/AdReportPage'
 import { SeoPage } from '@/pages/analytics/SeoPage'
 import { SearchQueryPage } from '@/pages/analytics/SearchQueryPage'
 import { KeywordToolPage } from '@/pages/analytics/KeywordToolPage'
+import { KeywordProposalPage } from '@/pages/analytics/KeywordProposalPage'
 import { CompetitorAnalysisPage } from '@/pages/analytics/CompetitorAnalysisPage'
 import { AdAccountsPage } from '@/pages/analytics/AdAccountsPage'
 import { PlanPage } from '@/pages/analytics/PlanPage'
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/analytics/seo" element={<SeoPage />} />
           <Route path="/analytics/search-queries" element={<SearchQueryPage />} />
           <Route path="/analytics/keywords" element={<KeywordToolPage />} />
+          <Route path="/analytics/keyword-proposals" element={<KeywordProposalPage />} />
           <Route path="/analytics/competitors" element={<CompetitorAnalysisPage />} />
           <Route path="/analytics/accounts" element={<AdAccountsPage />} />
           <Route path="/history" element={<AIHistoryPage />} />

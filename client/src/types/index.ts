@@ -907,3 +907,74 @@ export interface GoalCheckinResult {
   message: string
   view: GoalView
 }
+
+// 키워드 분석·제안 (금액은 원, 클릭·비용은 한 달 예상)
+export interface KeywordProposalRequest {
+  nccCampaignId: string | null
+  nccAdgroupId: string | null
+  hints: string[]
+  focusTerms: string[]
+  typeTerms: string[]
+  audienceTerms: string[]
+  excludeWords: string[]
+  profitPerConversion: number
+  maxCpc: number
+  monthlyBudget: number
+  cvrPct: number
+  maxKeywords: number
+}
+
+export interface ProposalOption {
+  bid: number
+  clicks: number
+  cost: number
+}
+
+/** tag: PICK(추천) · OVER_CAP(최대 금액 안에서 클릭 없음) · LOW_VOLUME(검색 적음) · LOW_EFFICIENCY(효율 낮음) */
+export interface ProposalItem {
+  keyword: string
+  monthlySearches: number
+  ctrPct: number
+  competition: string
+  weight: number
+  tag: 'PICK' | 'OVER_CAP' | 'LOW_VOLUME' | 'LOW_EFFICIENCY'
+  recommendedBid: number
+  clicks: number
+  cost: number
+  reason: string
+  registered: boolean
+  currentBid: number | null
+  options: ProposalOption[]
+  minBidAboveCap: number
+  clicksAboveCap: number
+  costAboveCap: number
+}
+
+export interface ProposalSummary {
+  candidates: number
+  picked: number
+  clicks: number
+  cost: number
+  avgCpc: number
+  conversions: number
+  profit: number
+  monthlyBudget: number
+  maxCpc: number
+  cvrPct: number
+  profitPerConversion: number
+}
+
+export interface KeywordProposal {
+  nccCampaignId: string | null
+  nccAdgroupId: string | null
+  adgroupName: string | null
+  summary: ProposalSummary
+  insights: string[]
+  items: ProposalItem[]
+}
+
+export interface ProposalApplyRequest {
+  nccAdgroupId: string
+  items: { keyword: string; bid: number }[]
+  removeUnselected: boolean
+}

@@ -9,6 +9,7 @@ import {
   KeyRound,
   MessageSquare,
   UserCheck,
+  Sparkles,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -35,6 +36,7 @@ const analyticsItems = [
   { to: '/analytics/ad-report', icon: FileBarChart, label: 'AI 광고 리포트', exact: false },
   { to: '/analytics/seo', icon: Globe2, label: '자연검색 SEO', exact: false },
   { to: '/analytics/search-queries', icon: ListFilter, label: '유입 검색어', exact: false },
+  { to: '/analytics/keyword-proposals', icon: Sparkles, label: '키워드 분석 · 제안', exact: false },
   { to: '/analytics/keywords', icon: Lightbulb, label: '키워드 발굴', exact: false },
   { to: '/analytics/competitors', icon: Globe, label: '경쟁사 분석', exact: false },
   { to: '/analytics/accounts', icon: KeyRound, label: '광고 계정 관리', exact: false },

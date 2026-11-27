@@ -55,6 +55,7 @@ public class RealtimeBidService {
     private static final int RESPECT_EFFICIENCY_DAYS = 7;
     static final int RESPECT_LAUNCH_DAYS = 7;
     static final String LAUNCH_PREFIX = "[새 광고]";
+    static final String PROPOSAL_PREFIX = "[키워드 제안]";
     private static final double FAST_PACE = 1.3;
     private static final double SLOW_DOWN = 0.85;
     private static final double STOP_PACE = 0.7;
@@ -247,7 +248,7 @@ public class RealtimeBidService {
 
     /** 최근 7일 안에 전환 효율 기준으로 바꾼 키워드. 그 판단이 결과를 낼 때까지 실시간 입찰은 손대지 않는다. */
     /**
-     * 새 광고 시작 때 키워드 분석(검색량·클릭률·입찰가별 예측)으로 입찰가를 정한 키워드.
+     * 새 광고 시작이나 키워드 분석·제안 화면에서 분석(검색량·클릭률·입찰가별 예측)으로 입찰가를 정한 키워드.
      * 실제 노출·클릭이 쌓일 때까지(RESPECT_LAUNCH_DAYS) 순위 추정가로 끌고 가지 않는다.
      */
     private Set<String> recentlyLaunched(Long accountId) {
@@ -255,7 +256,8 @@ public class RealtimeBidService {
         LocalDate today = LocalDate.now();
         for (AutopilotRun run : runRepository.findByAdAccountIdAndPreviewFalseAndDryRunFalseAndRunDateBetweenOrderByIdAsc(
                 accountId, today.minusDays(RESPECT_LAUNCH_DAYS), today)) {
-            if (run.getSummary() == null || !run.getSummary().startsWith(LAUNCH_PREFIX)) {
+            if (run.getSummary() == null
+                    || (!run.getSummary().startsWith(LAUNCH_PREFIX) && !run.getSummary().startsWith(PROPOSAL_PREFIX))) {
                 continue;
             }
             try {

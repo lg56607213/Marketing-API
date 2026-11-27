@@ -39,7 +39,13 @@ public final class KeywordSelector {
 
     /** 키워드 하나의 분석 결과. bid 가 0 이면 넣지 않는다(reason 에 이유). 클릭·비용은 한 달 예상. */
     public record Pick(String keyword, long monthlySearches, double ctrPct, String competition, double weight,
-                       long bid, long clicks, long cost, String reason) {
+                       long bid, long clicks, long cost, String reason, String tag) {
+        /** 추천 · 최대 금액 안에서 클릭 없음 · 검색 적음 · 효율 낮음 */
+        public static final String PICK = "PICK";
+        public static final String OVER_CAP = "OVER_CAP";
+        public static final String LOW_VOLUME = "LOW_VOLUME";
+        public static final String LOW_EFFICIENCY = "LOW_EFFICIENCY";
+
         public long cpc() {
             return clicks > 0 ? Math.round(cost / (double) clicks) : 0;
         }
@@ -80,15 +86,18 @@ public final class KeywordSelector {
             Rules rules, Budget budget) {
         Map<String, List<PerformanceEstimate>> curves = new HashMap<>();
         Map<String, String> rejected = new HashMap<>();
+        Map<String, String> rejectedTag = new HashMap<>();
         for (Map.Entry<String, RelatedKeyword> e : stats.entrySet()) {
             String keyword = e.getKey();
             if (e.getValue().totalCount() < rules.minMonthlySearches()) {
                 rejected.put(keyword, String.format("월 검색 %d회로 너무 적어 뺍니다.", e.getValue().totalCount()));
+                rejectedTag.put(keyword, Pick.LOW_VOLUME);
                 continue;
             }
             List<PerformanceEstimate> curve = usableCurve(estimates.getOrDefault(keyword, List.of()), budget);
             if (curve.isEmpty()) {
                 rejected.put(keyword, String.format("클릭 1회 최대 %,d원 안에서는 예상 클릭이 없어 뺍니다.", budget.maxCpc()));
+                rejectedTag.put(keyword, Pick.OVER_CAP);
                 continue;
             }
             curves.put(keyword, curve);
@@ -151,10 +160,11 @@ public final class KeywordSelector {
                         p.cost(), String.format("월 검색 %,d회·클릭률 %.1f%%·경쟁 %s. %,d원에 월 %,d클릭·%,d원(클릭당 %,d원) 예상, "
                                         + "전환 가중치 %.1f로 1원당 효율이 높아 넣습니다.",
                                 r.totalCount(), ctrPct(r), r.competition(), p.bid(), p.clicks(), p.cost(),
-                                p.clicks() > 0 ? p.cost() / p.clicks() : 0, w)));
+                                p.clicks() > 0 ? p.cost() / p.clicks() : 0, w), Pick.PICK));
             } else {
                 String why = rejected.getOrDefault(keyword, "예산 안에서 다른 키워드보다 광고비 대비 클릭 효율이 낮아 뺍니다.");
-                picks.add(new Pick(keyword, r.totalCount(), ctrPct(r), r.competition(), w, 0, 0, 0, why));
+                picks.add(new Pick(keyword, r.totalCount(), ctrPct(r), r.competition(), w, 0, 0, 0, why,
+                        rejectedTag.getOrDefault(keyword, Pick.LOW_EFFICIENCY)));
             }
         }
         picks.sort(Comparator.comparingLong(Pick::bid).reversed().thenComparing(Pick::clicks, Comparator.reverseOrder()));
