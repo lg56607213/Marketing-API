@@ -25,6 +25,16 @@ class SubsidyServiceUnitTest {
     }
 
     @Test
+    void AI가_요약을_배열로_주거나_지역을_문자열로_줘도_읽는다() throws Exception {
+        Eligibility e = SubsidyAi.parseEligibility(new com.fasterxml.jackson.databind.ObjectMapper(),
+                "{\"regions\":\"경남\",\"summary\":[\"첫 줄\",\"둘째 줄\"],\"amount_text\":[\"최대 1억원\"],\"max_biz_age_years\":7}");
+        assertThat(e.regions()).containsExactly("경남");
+        assertThat(e.summary()).isEqualTo("첫 줄 / 둘째 줄");
+        assertThat(e.amountText()).isEqualTo("최대 1억원");
+        assertThat(e.maxBizAgeYears()).isEqualTo(7.0);
+    }
+
+    @Test
     void AI없이도_지역은_규칙으로_뽑고_나머지는_모름으로_둔다() {
         SubsidyAnnouncement a = new SubsidyAnnouncement("bizinfo", "1");
         a.refresh(new SubsidyAnnouncement.Normalized("bizinfo", "1", "[부산] 소상공인 지원", null, "요약", null,

@@ -72,7 +72,7 @@ public class SubsidyAi {
                         + nz(a.getRegionText()) + "\n[신청기간] " + a.getApplyStart() + " ~ " + a.getApplyEnd()
                         + "\n[지원대상] " + nz(a.getTargetText()) + "\n[사업 개요]\n" + cut(a.getSummary(), 6000);
                 String raw = aiProvider.generate(new AiRequest(EXTRACT_SYSTEM, user, properties.extractModel())).content();
-                return objectMapper.readValue(jsonObject(raw), Eligibility.class);
+                return parseEligibility(objectMapper, jsonObject(raw));
             } catch (Exception e) {
                 log.warn("공고 자격요건 추출 실패, 규칙으로 대신합니다: {} {}", a.getTitle(), e.getMessage());
             }
@@ -127,6 +127,30 @@ public class SubsidyAi {
             log.warn("지원사업 재판단 실패: {} {}", a.getTitle(), e.getMessage());
             return null;
         }
+    }
+
+    private static final java.util.Set<String> TEXT_FIELDS = java.util.Set.of("support_type", "amount_text", "summary");
+    private static final java.util.Set<String> LIST_FIELDS = java.util.Set.of("regions", "entity_types",
+            "target_industries", "excluded_industries", "required_certs", "preferred");
+
+    /** AI 가 문자열 칸에 목록을(예: 3줄 요약을 배열로), 목록 칸에 문자열을 넣어도 읽는다. */
+    static Eligibility parseEligibility(ObjectMapper om, String json) throws Exception {
+        com.fasterxml.jackson.databind.node.ObjectNode node = (com.fasterxml.jackson.databind.node.ObjectNode) om.readTree(json);
+        for (String f : TEXT_FIELDS) {
+            JsonNode v = node.get(f);
+            if (v != null && v.isArray()) {
+                List<String> parts = new ArrayList<>();
+                v.forEach(x -> parts.add(x.asText()));
+                node.put(f, String.join(" / ", parts));
+            }
+        }
+        for (String f : LIST_FIELDS) {
+            JsonNode v = node.get(f);
+            if (v != null && v.isTextual()) {
+                node.putArray(f).add(v.asText());
+            }
+        }
+        return om.treeToValue(node, Eligibility.class);
     }
 
     static String jsonObject(String raw) {
