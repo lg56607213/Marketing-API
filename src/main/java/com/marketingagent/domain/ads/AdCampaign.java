@@ -39,6 +39,16 @@ public class AdCampaign extends BaseEntity {
      */
     private Long targetCpa;
 
+    /** 전환 1건으로 남는 돈. 자동 운영의 클릭 1회 최대 금액 계산에 쓴다. null 이면 계정 기본값. 동기화로 덮어쓰지 않는다. */
+    private Long breakEvenCpa;
+
+    /** 클릭 1회 최대 금액. 있으면 손익분기 계산보다 먼저 쓴다. 동기화로 덮어쓰지 않는다. */
+    private Long maxCpc;
+
+    /** 키워드 판단에 쓰는 이 캠페인의 상품·고객 설명. 동기화로 덮어쓰지 않는다. */
+    @Column(length = 500)
+    private String businessNote;
+
     public AdCampaign(Long adAccountId, String nccCampaignId, String name, String campaignTp,
             String status, Long dailyBudget) {
         this.adAccountId = adAccountId;
@@ -54,6 +64,14 @@ public class AdCampaign extends BaseEntity {
         this.campaignTp = campaignTp;
         this.status = status;
         this.dailyBudget = dailyBudget;
+    }
+
+    /** 0 이하나 빈 값은 "계정 기본값을 따른다"로 저장한다. */
+    public void changeEconomics(Long breakEvenCpa, Long maxCpc, String businessNote) {
+        this.breakEvenCpa = breakEvenCpa != null && breakEvenCpa > 0 ? breakEvenCpa : null;
+        this.maxCpc = maxCpc != null && maxCpc > 0 ? maxCpc : null;
+        this.businessNote = businessNote == null || businessNote.isBlank() ? null
+                : businessNote.strip().substring(0, Math.min(500, businessNote.strip().length()));
     }
 
     public void changeTargetCpa(Long targetCpa) {

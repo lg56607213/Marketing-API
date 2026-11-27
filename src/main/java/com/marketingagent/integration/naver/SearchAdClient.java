@@ -117,6 +117,40 @@ public interface SearchAdClient {
         return -1;
     }
 
+    // --- 새 광고 시작: 비즈채널 · 광고그룹 · 소재 ---
+
+    /** 계정에 등록한 비즈채널(광고를 연결할 사이트 등). */
+    default List<BusinessChannel> listBusinessChannels() {
+        throw new UnsupportedOperationException("비즈채널 조회를 지원하지 않는 클라이언트입니다");
+    }
+
+    /** 웹사이트 비즈채널을 등록한다. 네이버 검수가 끝나야 광고가 노출된다. */
+    default BusinessChannel createSiteChannel(String name, String url) {
+        throw new UnsupportedOperationException("비즈채널 등록을 지원하지 않는 클라이언트입니다");
+    }
+
+    /** 파워링크(웹사이트) 캠페인에 광고그룹을 만든다. PC·모바일 모두 같은 비즈채널로 연결한다. */
+    default NccAdgroup createAdgroup(String nccCampaignId, String name, String channelId, long bidAmt) {
+        throw new UnsupportedOperationException("광고그룹 생성을 지원하지 않는 클라이언트입니다");
+    }
+
+    /** 광고그룹의 소재 수. */
+    default int countAds(String nccAdgroupId) {
+        throw new UnsupportedOperationException("소재 조회를 지원하지 않는 클라이언트입니다");
+    }
+
+    /**
+     * 텍스트 소재(제목 15자·설명 45자)를 만든다. 네이버 검수 후 노출된다.
+     *
+     * @return 만든 소재 ID
+     */
+    default String createTextAd(String nccAdgroupId, String headline, String description, String landingUrl) {
+        throw new UnsupportedOperationException("소재 생성을 지원하지 않는 클라이언트입니다");
+    }
+
+    /** @param key 사이트 채널이면 주소 */
+    record BusinessChannel(String id, String type, String name, String key, String status) {}
+
     /** 등록 요청용 키워드. bidAmt 가 null 이면 그룹 입찰가를 따른다. */
     record NewKeyword(String keyword, Long bidAmt) {}
 

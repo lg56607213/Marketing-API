@@ -2,11 +2,17 @@ package com.marketingagent.domain.ads.autopilot;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketingagent.domain.ads.AdCampaign;
+import com.marketingagent.domain.ads.AdCampaignRepository;
+import com.marketingagent.domain.ads.AdGroup;
+import com.marketingagent.domain.ads.AdGroupRepository;
 import com.marketingagent.domain.goal.GoalSession;
 import com.marketingagent.domain.goal.GoalSessionRepository;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +37,8 @@ public class AutopilotGoals {
     private final ObjectMapper objectMapper;
     private final com.marketingagent.domain.ads.KeywordStatDailyRepository statRepository;
     private final com.marketingagent.domain.ads.BidPolicyProperties policy;
+    private final AdCampaignRepository campaignRepository;
+    private final AdGroupRepository adGroupRepository;
 
     /**
      * 클릭 1회에 낼 수 있는 최대 금액.
@@ -45,6 +53,73 @@ public class AutopilotGoals {
         }
         Goals g = of(accountId);
         long breakEven = g.breakEvenCpa() > 0 ? g.breakEvenCpa() : g.targetCpa() * 2;
+        return fromBreakEven(accountId, breakEven);
+    }
+
+    /**
+     * 광고그룹별 클릭 1회 최대 금액. 한 계정에 사이트(캠페인)가 여럿이면 상품마다 남는 돈이 달라서
+     * 캠페인에 정해 둔 값(최대 금액 → 손익분기 순)을 먼저 쓰고, 없으면 계정 기본값({@link #maxCpc})을 쓴다.
+     */
+    public Ceiling ceiling(Long accountId, AutopilotSettings settings) {
+        long base = maxCpc(accountId, settings);
+        Map<String, Long> byCampaign = new HashMap<>();
+        for (AdCampaign c : campaignRepository.findByAdAccountIdOrderByNameAsc(accountId)) {
+            long value = c.getMaxCpc() != null && c.getMaxCpc() > 0 ? c.getMaxCpc()
+                    : c.getBreakEvenCpa() != null && c.getBreakEvenCpa() > 0 ? fromBreakEven(accountId, c.getBreakEvenCpa())
+                    : 0;
+            if (value > 0) {
+                byCampaign.put(c.getNccCampaignId(), value);
+            }
+        }
+        Map<String, Long> byAdgroup = new HashMap<>();
+        if (!byCampaign.isEmpty()) {
+            for (AdGroup g : adGroupRepository.findByAdAccountIdOrderByNameAsc(accountId)) {
+                Long value = byCampaign.get(g.getNccCampaignId());
+                if (value != null) {
+                    byAdgroup.put(g.getNccAdgroupId(), value);
+                }
+            }
+        }
+        return new Ceiling(base, Map.copyOf(byAdgroup));
+    }
+
+    /** @param base 계정 기본값. 0 이면 근거 없음 */
+    public record Ceiling(long base, Map<String, Long> byAdgroup) {
+        public long of(String nccAdgroupId) {
+            return nccAdgroupId == null ? base : byAdgroup.getOrDefault(nccAdgroupId, base);
+        }
+
+        /** 어느 그룹이든 기준이 하나라도 있는지. */
+        public boolean any() {
+            return base > 0 || byAdgroup.values().stream().anyMatch(v -> v > 0);
+        }
+    }
+
+    /**
+     * 캠페인마다 적어 둔 상품 설명. 키워드 판단 AI 가 검색어가 들어온 그룹의 상품 기준으로 보게 한다.
+     *
+     * @return 광고그룹 ID → "캠페인 X / 광고그룹 Y" 표기와, 설명 줄 목록
+     */
+    public CampaignContext campaignContext(Long accountId) {
+        Map<String, AdCampaign> campaigns = new HashMap<>();
+        campaignRepository.findByAdAccountIdOrderByNameAsc(accountId).forEach(c -> campaigns.put(c.getNccCampaignId(), c));
+        Map<String, String> labels = new HashMap<>();
+        for (AdGroup g : adGroupRepository.findByAdAccountIdOrderByNameAsc(accountId)) {
+            AdCampaign c = campaigns.get(g.getNccCampaignId());
+            labels.put(g.getNccAdgroupId(), (c != null ? "캠페인 " + c.getName() + " / " : "") + "광고그룹 " + g.getName());
+        }
+        List<String> notes = new ArrayList<>();
+        campaigns.values().stream()
+                .filter(c -> c.getBusinessNote() != null && !c.getBusinessNote().isBlank())
+                .forEach(c -> notes.add("캠페인 " + c.getName() + ": " + c.getBusinessNote()));
+        return new CampaignContext(Map.copyOf(labels), List.copyOf(notes));
+    }
+
+    public record CampaignContext(Map<String, String> adgroupLabels, List<String> notes) {
+        static final CampaignContext EMPTY = new CampaignContext(Map.of(), List.of());
+    }
+
+    private long fromBreakEven(Long accountId, long breakEven) {
         if (breakEven <= 0) {
             return 0;
         }

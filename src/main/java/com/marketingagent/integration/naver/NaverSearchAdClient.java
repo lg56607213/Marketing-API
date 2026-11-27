@@ -363,6 +363,63 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     @Override
+    public List<BusinessChannel> listBusinessChannels() {
+        List<JsonNode> response = get("/ncc/channels", "", new ParameterizedTypeReference<List<JsonNode>>() {});
+        return response.stream().map(NaverSearchAdClient::toChannel).toList();
+    }
+
+    @Override
+    public BusinessChannel createSiteChannel(String name, String url) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("channelTp", "SITE");
+        body.put("name", name);
+        body.put("channelKey", url);
+        return toChannel(post("/ncc/channels", body));
+    }
+
+    private static BusinessChannel toChannel(JsonNode node) {
+        return new BusinessChannel(node.path("nccBusinessChannelId").asText(), node.path("channelTp").asText(),
+                node.path("name").asText(), node.path("channelKey").asText(), node.path("status").asText());
+    }
+
+    @Override
+    public NccAdgroup createAdgroup(String nccCampaignId, String name, String channelId, long bidAmt) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("nccCampaignId", nccCampaignId);
+        body.put("name", name);
+        body.put("adgroupType", "WEB_SITE");
+        body.put("pcChannelId", channelId);
+        body.put("mobileChannelId", channelId);
+        body.put("bidAmt", bidAmt);
+        // 하루 예산은 캠페인 예산 하나로 관리한다
+        body.put("useDailyBudget", false);
+        JsonNode node = post("/ncc/adgroups", body);
+        return new NccAdgroup(node.path("nccAdgroupId").asText(), node.path("nccCampaignId").asText(),
+                node.path("name").asText(), node.path("status").asText(), node.path("bidAmt").asLong(),
+                node.path("dailyBudget").asLong(), node.path("userLock").asBoolean());
+    }
+
+    @Override
+    public int countAds(String nccAdgroupId) {
+        return get("/ncc/ads", "nccAdgroupId=" + encode(nccAdgroupId),
+                new ParameterizedTypeReference<List<JsonNode>>() {}).size();
+    }
+
+    @Override
+    public String createTextAd(String nccAdgroupId, String headline, String description, String landingUrl) {
+        Map<String, Object> ad = new LinkedHashMap<>();
+        ad.put("headline", headline);
+        ad.put("description", description);
+        ad.put("pc", Map.of("final", landingUrl));
+        ad.put("mobile", Map.of("final", landingUrl));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("type", "TEXT_45");
+        body.put("nccAdgroupId", nccAdgroupId);
+        body.put("ad", ad);
+        return post("/ncc/ads", body).path("nccAdId").asText();
+    }
+
+    @Override
     public void deleteKeyword(String nccKeywordId) {
         delete("/ncc/keywords/" + nccKeywordId, "");
     }

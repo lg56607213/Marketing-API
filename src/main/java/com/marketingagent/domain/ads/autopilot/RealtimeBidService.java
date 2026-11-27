@@ -39,7 +39,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>지키는 선:
  * <ul>
- *   <li>클릭 1회 최대 금액({@link AutopilotGoals#maxCpc})을 절대 넘지 않는다. 근거가 없으면 아무것도 바꾸지 않는다.</li>
+ *   <li>키워드가 속한 캠페인의 클릭 1회 최대 금액({@link AutopilotGoals#ceiling})을 절대 넘지 않는다. 근거가 없으면 아무것도 바꾸지 않는다.</li>
  *   <li>한 번에 바꾸는 폭은 입찰 정책의 1회 변동폭 안이다. 1시간마다 조금씩 따라간다.</li>
  *   <li>오늘 예산을 너무 빨리 쓰고 있으면(월 한도 기준) 입찰가를 낮춰 속도를 늦춘다.</li>
  *   <li>최근 7일 안에 전환 효율 기준으로 바꾼 키워드는 그 판단을 존중해 건드리지 않는다.</li>
@@ -109,9 +109,9 @@ public class RealtimeBidService {
         List<Action> actions = new ArrayList<>();
         List<String> notes = new ArrayList<>();
 
-        long maxCpc = goals.maxCpc(scope.id(), settings);
+        AutopilotGoals.Ceiling ceiling = goals.ceiling(scope.id(), settings);
         int targetRank = settings != null ? settings.getTargetRank() : 3;
-        if (maxCpc <= 0) {
+        if (!ceiling.any()) {
             notes.add("클릭 1회 최대 금액을 정할 근거가 없어 입찰가를 건드리지 않았습니다. 목표 상담을 마치거나 자동 운영 설정에서 최대 금액을 정해 주세요.");
             return finish(scope, preview, dry, actions, notes);
         }
@@ -144,7 +144,9 @@ public class RealtimeBidService {
             long current = Boolean.TRUE.equals(k.getUseGroupBidAmt()) || k.getBidAmt() == null
                     ? groupBids.getOrDefault(k.getNccAdgroupId(), 0L)
                     : k.getBidAmt();
-            if (current <= 0) {
+            // 사이트(캠페인)마다 남는 돈이 달라 키워드가 속한 캠페인의 최대 금액을 쓴다
+            long maxCpc = ceiling.of(k.getNccAdgroupId());
+            if (current <= 0 || maxCpc <= 0) {
                 continue;
             }
             long goal = estimate != null && estimate > 0 ? Math.min(estimate, maxCpc) : Math.min(current, maxCpc);

@@ -135,14 +135,15 @@ public class KeywordCurator {
             return;
         }
 
-        List<Judgment> judgments = judge(candidates, registered, g);
+        AutopilotGoals.CampaignContext campaigns = goals.campaignContext(scope.id());
+        List<Judgment> judgments = judge(candidates, registered, g, campaigns);
         Map<String, Candidate> byKey = new HashMap<>();
         candidates.forEach(c -> byKey.put(normalize(c.keyword()), c));
 
         int[] done = doneToday(scope.id());
         int addRoom = MAX_ADDS_PER_DAY - done[0];
         int negativeRoom = MAX_NEGATIVES_PER_DAY - done[1];
-        long maxCpc = goals.maxCpc(scope.id(), settings);
+        AutopilotGoals.Ceiling ceiling = goals.ceiling(scope.id(), settings);
         int targetRank = settings != null ? settings.getTargetRank() : 3;
         Map<String, Set<String>> existingNegatives = new HashMap<>();
         int skippedAdds = 0;
@@ -159,7 +160,7 @@ public class KeywordCurator {
                     continue;
                 }
                 addRoom--;
-                addKeyword(scope, c, j.reason(), adgroups, registered, maxCpc, targetRank, preview, dry, idle, actions);
+                addKeyword(scope, c, j.reason(), adgroups, registered, ceiling, targetRank, preview, dry, idle, actions);
             } else if (negatives && "EXCLUDE".equals(j.decision()) && "유입 검색어".equals(c.source())) {
                 if (negativeRoom <= 0) {
                     skippedNegatives++;
@@ -225,9 +226,15 @@ public class KeywordCurator {
     }
 
     List<Judgment> judge(List<Candidate> candidates, List<AdKeyword> registered, AutopilotGoals.Goals g) {
-        if (!"stub".equalsIgnoreCase(aiProviderName) && g.context() != null && !g.context().isBlank()) {
+        return judge(candidates, registered, g, AutopilotGoals.CampaignContext.EMPTY);
+    }
+
+    List<Judgment> judge(List<Candidate> candidates, List<AdKeyword> registered, AutopilotGoals.Goals g,
+            AutopilotGoals.CampaignContext campaigns) {
+        boolean hasContext = (g.context() != null && !g.context().isBlank()) || !campaigns.notes().isEmpty();
+        if (!"stub".equalsIgnoreCase(aiProviderName) && hasContext) {
             try {
-                List<Judgment> fromAi = judgeWithAi(candidates, registered, g);
+                List<Judgment> fromAi = judgeWithAi(candidates, registered, g, campaigns);
                 if (!fromAi.isEmpty()) {
                     return fromAi;
                 }
@@ -238,9 +245,12 @@ public class KeywordCurator {
         return judgeByRules(candidates, registered, g);
     }
 
-    private List<Judgment> judgeWithAi(List<Candidate> candidates, List<AdKeyword> registered, AutopilotGoals.Goals g) {
+    private List<Judgment> judgeWithAi(List<Candidate> candidates, List<AdKeyword> registered, AutopilotGoals.Goals g,
+            AutopilotGoals.CampaignContext campaigns) {
         String system = """
                 너는 네이버 검색광고를 대신 운영하는 마케터다. 업체의 사업 설명을 보고 각 후보를 판단한다.
+                한 업체가 사이트(캠페인)를 여러 개 운영할 수 있다. 후보 옆에 들어온 광고그룹이 적혀 있으면
+                그 캠페인의 상품 기준으로 판단한다. 다른 캠페인 상품과 다르다는 이유로 막지 않는다.
                 - ADD: 업체 상품을 살 사람이 검색할 말이 분명할 때만. 너무 넓거나 정보만 찾는 말은 넣지 않는다.
                 - EXCLUDE: 업체 상품과 무관하거나 살 생각이 없는 검색일 때만(채용·구인, 무료 정보, 뜻·방법, 다른 업종·다른 상품 등).
                   업체 상품과 관련이 있으면 클릭이 적어도 막지 않는다.
@@ -248,12 +258,18 @@ public class KeywordCurator {
                 출력은 JSON 배열만: [{"keyword":"후보 그대로","decision":"ADD|EXCLUDE|KEEP","reason":"한국어 한 문장"}]
                 """;
         StringBuilder user = new StringBuilder();
-        user.append("[사업 설명]\n").append(g.context()).append("\n\n[이미 등록한 키워드]\n");
+        user.append("[사업 설명]\n").append(g.context() != null ? g.context() : "").append('\n');
+        if (!campaigns.notes().isEmpty()) {
+            user.append("\n[캠페인별 상품]\n");
+            campaigns.notes().forEach(n -> user.append("- ").append(n).append('\n'));
+        }
+        user.append("\n[이미 등록한 키워드]\n");
         registered.stream().limit(60).forEach(k -> user.append(k.getKeyword()).append(", "));
-        user.append("\n\n[후보] (출처 / 최근 14일 노출·클릭·광고비)\n");
+        user.append("\n\n[후보] (출처 / 최근 14일 노출·클릭·광고비 / 들어온 광고그룹)\n");
         for (Candidate c : candidates) {
-            user.append(String.format("- %s (%s / 노출 %d, 클릭 %d, 광고비 %,d원)%n", c.keyword(), c.source(), c.imp(),
-                    c.clk(), c.cost()));
+            String group = c.nccAdgroupId() != null ? campaigns.adgroupLabels().get(c.nccAdgroupId()) : null;
+            user.append(String.format("- %s (%s / 노출 %d, 클릭 %d, 광고비 %,d원%s)%n", c.keyword(), c.source(), c.imp(),
+                    c.clk(), c.cost(), group != null ? " / " + group : ""));
         }
         String raw = aiProvider.generate(new AiRequest(system, user.toString(), null)).content();
         int start = raw.indexOf('[');
@@ -306,9 +322,10 @@ public class KeywordCurator {
     }
 
     private void addKeyword(AccountScope scope, Candidate c, String reason, List<AdGroup> adgroups,
-            List<AdKeyword> registered, long maxCpc, int targetRank, boolean preview, boolean dry, String idle,
-            List<Action> actions) {
+            List<AdKeyword> registered, AutopilotGoals.Ceiling ceiling, int targetRank, boolean preview, boolean dry,
+            String idle, List<Action> actions) {
         String adgroup = c.nccAdgroupId() != null ? c.nccAdgroupId() : closestAdgroup(c.keyword(), adgroups, registered);
+        long maxCpc = ceiling.of(adgroup);
         String groupName = adgroups.stream().filter(a -> a.getNccAdgroupId().equals(adgroup))
                 .map(AdGroup::getName).findFirst().orElse(adgroup);
         Long bid = null;

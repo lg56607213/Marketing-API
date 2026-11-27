@@ -74,10 +74,10 @@ public class AutopilotService {
     /** 일예산을 올린 뒤 다시 올리기까지 기다리는 날수. 매일 20%씩 복리로 불어나는 것을 막는다. */
     private static final int BUDGET_RAISE_COOLDOWN_DAYS = 7;
 
-    static final String STATUS_APPLIED = "반영됨";
-    static final String STATUS_DRY_RUN = "기록만";
+    public static final String STATUS_APPLIED = "반영됨";
+    public static final String STATUS_DRY_RUN = "기록만";
     static final String STATUS_PREVIEW = "미리보기";
-    static final String STATUS_FAILED = "실패";
+    public static final String STATUS_FAILED = "실패";
 
     private final AutopilotSettingsRepository settingsRepository;
     private final AutopilotRunRepository runRepository;
@@ -475,7 +475,7 @@ public class AutopilotService {
     // --- 보조 ---
 
     /** 조치 목록을 한 줄로. 실시간 입찰 기록에도 쓴다. */
-    static String summary(List<Action> actions, boolean preview, boolean dry) {
+    public static String summary(List<Action> actions, boolean preview, boolean dry) {
         if (actions.isEmpty()) {
             return preview ? "지금 실행해도 바꿀 것이 없습니다." : "바꾼 것이 없습니다.";
         }
