@@ -2,6 +2,7 @@ package com.marketingagent.domain.ads.launch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marketingagent.domain.ads.AdCampaignRepository;
+import com.marketingagent.domain.ads.AdKeywordRepository;
 import com.marketingagent.domain.ads.AdSyncService;
 import com.marketingagent.domain.ads.BidPolicyProperties;
 import com.marketingagent.domain.ads.account.AccountScope;
@@ -15,6 +16,12 @@ import com.marketingagent.integration.naver.SearchAdClient;
 import com.marketingagent.integration.naver.SearchAdClient.BusinessChannel;
 import com.marketingagent.integration.naver.dto.NccAdgroup;
 import com.marketingagent.integration.naver.dto.NccCampaign;
+import com.marketingagent.integration.naver.dto.NccKeyword;
+import com.marketingagent.integration.naver.dto.PerformanceEstimate;
+import com.marketingagent.integration.naver.dto.RelatedKeyword;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,6 +52,9 @@ public class AdLaunchService {
     static final String TYPE_AD = "소재 생성";
     /** 자동 운영의 키워드 추가와 같은 종류로 남겨, 30일 넘게 클릭이 없으면 자동 정리 대상이 되게 한다. */
     static final String TYPE_KEYWORD = "키워드 추가";
+    static final String TYPE_ANALYSIS = "키워드 분석";
+    static final String TYPE_BID = "입찰가 변경";
+    static final String TYPE_DELETE = "키워드 삭제";
     private static final int TARGET_RANK = 3;
     private static final int HEADLINE_MAX = 15;
     private static final int DESCRIPTION_MAX = 45;
@@ -52,6 +62,7 @@ public class AdLaunchService {
     private final AdAccountService accountService;
     private final AdSyncService syncService;
     private final AdCampaignRepository campaignRepository;
+    private final AdKeywordRepository keywordRepository;
     private final AutopilotRunRepository runRepository;
     private final AutopilotService autopilotService;
     private final BidPolicyProperties policy;
@@ -59,12 +70,14 @@ public class AdLaunchService {
     private final TransactionTemplate tx;
 
     public AdLaunchService(AdAccountService accountService, AdSyncService syncService,
-            AdCampaignRepository campaignRepository, AutopilotRunRepository runRepository,
+            AdCampaignRepository campaignRepository, AdKeywordRepository keywordRepository,
+            AutopilotRunRepository runRepository,
             AutopilotService autopilotService, BidPolicyProperties policy, ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
         this.accountService = accountService;
         this.syncService = syncService;
         this.campaignRepository = campaignRepository;
+        this.keywordRepository = keywordRepository;
         this.runRepository = runRepository;
         this.autopilotService = autopilotService;
         this.policy = policy;
@@ -134,6 +147,13 @@ public class AdLaunchService {
             }
         }
 
+        if (plan.analysis() != null) {
+            // 3) 키워드: 데이터로 고르고 입찰가를 정해 그룹을 그 결과에 맞춘다
+            long daily = campaign.dailyBudget() != null && campaign.dailyBudget() > 0 ? campaign.dailyBudget() : 0;
+            analyzeAndApply(scope.id(), client, plan, adgroupId, daily * 30, dry, idle, actions, notes);
+            return saveEconomicsAndFinish(scope, plan, campaign.nccCampaignId(), dry, actions, notes);
+        }
+
         // 3) 키워드: 없는 것만, 목표 순위 추정가로 하되 최대 금액을 넘지 않게
         Set<String> existing = new HashSet<>();
         if (!dry) {
@@ -179,8 +199,143 @@ public class AdLaunchService {
                     status));
         }
 
+        return saveEconomicsAndFinish(scope, plan, campaign.nccCampaignId(), dry, actions, notes);
+    }
+
+    /**
+     * 키워드도구(검색량·클릭률·경쟁)와 입찰가 단계별 성과 예측으로 키워드와 입찰가를 정하고, 광고그룹을 그 결과에 맞춘다.
+     * 고른 키워드는 넣거나 입찰가를 고치고, 그룹에 있지만 고르지 않은 키워드는 지운다.
+     */
+    private void analyzeAndApply(Long accountId, SearchAdClient client, LaunchPlan plan, String adgroupId, long monthlyBudget,
+            boolean dry, String idle, List<Action> actions, List<String> notes) {
+        LaunchPlan.Analysis a = plan.analysis();
+        KeywordSelector.Rules rules = new KeywordSelector.Rules(a.requireAny(), a.focusAny(), a.excludeWords(),
+                a.audienceTerms(), a.productTerms(), a.audienceWeight() > 0 ? a.audienceWeight() : 1,
+                a.productWeight() > 0 ? a.productWeight() : 1, a.minMonthlySearches());
+        long cap = plan.maxCpc() != null && plan.maxCpc() > 0 ? plan.maxCpc() : policy.maxBid();
+        KeywordSelector.Budget budget = new KeywordSelector.Budget(monthlyBudget > 0 ? monthlyBudget : 1_500_000, cap,
+                plan.breakEvenCpa() != null ? plan.breakEvenCpa() : 0, a.assumedCvr() > 0 ? a.assumedCvr() : 0.02,
+                a.maxKeywords() > 0 ? a.maxKeywords() : 20);
+
+        // 후보: 힌트로 받은 연관 키워드 + 계획의 키워드
+        List<String> hints = new ArrayList<>(a.hints() != null ? a.hints() : List.of());
+        if (plan.keywords() != null) {
+            hints.addAll(plan.keywords());
+        }
+        Map<String, RelatedKeyword> pool = new LinkedHashMap<>();
+        for (int i = 0; i < hints.size(); i += 5) {
+            try {
+                for (RelatedKeyword r : client.relatedKeywords(hints.subList(i, Math.min(i + 5, hints.size())))) {
+                    String k = r.keyword().replace(" ", "");
+                    if (KeywordSelector.relevant(k, rules)) {
+                        pool.merge(k, r, (x, y) -> x.totalCount() >= y.totalCount() ? x : y);
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn("키워드도구 조회 실패 {}: {}", hints.subList(i, Math.min(i + 5, hints.size())), e.getMessage());
+            }
+        }
+        if (pool.isEmpty()) {
+            notes.add("키워드도구에서 관련 키워드를 받지 못해 키워드를 바꾸지 않았습니다.");
+            return;
+        }
+        int maxCandidates = a.maxCandidates() > 0 ? a.maxCandidates() : 60;
+        Map<String, RelatedKeyword> candidates = new LinkedHashMap<>();
+        pool.values().stream()
+                .sorted(Comparator.comparingLong(RelatedKeyword::totalCount).reversed())
+                .limit(maxCandidates)
+                .forEach(r -> candidates.put(r.keyword().replace(" ", ""), r));
+
+        List<Long> ladder = a.bidLadder() != null && !a.bidLadder().isEmpty() ? a.bidLadder()
+                : List.of(100L, 200L, 300L, 500L, 700L, 1000L, 1500L, 2000L, 2500L, 3000L);
+        List<PerformanceEstimate.Query> queries = new ArrayList<>();
+        for (String k : candidates.keySet()) {
+            for (Long bid : ladder) {
+                if (bid <= cap) {
+                    queries.add(new PerformanceEstimate.Query(k, bid));
+                }
+            }
+        }
+        Map<String, List<PerformanceEstimate>> curves = new HashMap<>();
+        try {
+            for (PerformanceEstimate p : client.estimatePerformance(queries, "BOTH")) {
+                curves.computeIfAbsent(p.keyword().replace(" ", ""), x -> new ArrayList<>()).add(p);
+            }
+        } catch (RuntimeException e) {
+            log.error("성과 예측 실패", e);
+            notes.add("네이버 성과 예측을 받지 못해 키워드를 바꾸지 않았습니다.");
+            return;
+        }
+
+        List<KeywordSelector.Pick> picks = KeywordSelector.select(candidates, curves, rules, budget);
+        long plannedCost = picks.stream().mapToLong(KeywordSelector.Pick::cost).sum();
+        long plannedClicks = picks.stream().mapToLong(KeywordSelector.Pick::clicks).sum();
+        long chosen = picks.stream().filter(p -> p.bid() > 0).count();
+        notes.add(String.format("후보 %d개를 분석해 %d개를 골랐습니다. 예상 월 %,d클릭 · 광고비 %,d원(평균 클릭당 %,d원), "
+                        + "한 달 예산 %,d원, 클릭 1회 최대 %,d원, 가정 전환율 %.1f%%.",
+                candidates.size(), chosen, plannedClicks, plannedCost,
+                plannedClicks > 0 ? plannedCost / plannedClicks : 0, budget.monthlyBudget(), cap, budget.cvr() * 100));
+        for (KeywordSelector.Pick p : picks) {
+            actions.add(new Action(TYPE_ANALYSIS, p.keyword(),
+                    String.format("월 검색 %,d · 클릭률 %.1f%% · 경쟁 %s", p.monthlySearches(), p.ctrPct(), p.competition()),
+                    p.bid() > 0 ? String.format("%,d원 (월 %,d클릭)", p.bid(), p.clicks()) : "넣지 않음",
+                    p.reason(), AutopilotService.STATUS_DRY_RUN.equals(idle) ? idle : "분석"));
+        }
+
+        Map<String, NccKeyword> existing = new HashMap<>();
+        if (!dry) {
+            client.listKeywords(adgroupId).forEach(k -> existing.put(normalize(k.keyword()), k));
+        }
+        Set<String> keep = new HashSet<>();
+        for (KeywordSelector.Pick p : picks) {
+            if (p.bid() <= 0) {
+                continue;
+            }
+            keep.add(normalize(p.keyword()));
+            NccKeyword now = existing.get(normalize(p.keyword()));
+            if (now != null && now.bidAmt() != null && now.bidAmt() == p.bid() && !Boolean.TRUE.equals(now.useGroupBidAmt())) {
+                continue;
+            }
+            String status = idle;
+            if (!dry) {
+                try {
+                    if (now == null) {
+                        client.createKeywords(adgroupId, List.of(new SearchAdClient.NewKeyword(p.keyword(), p.bid())));
+                    } else {
+                        client.updateKeywordBid(now.nccKeywordId(), adgroupId, now.keyword(), p.bid());
+                    }
+                } catch (RuntimeException e) {
+                    log.error("분석 키워드 반영 실패: {}", p.keyword(), e);
+                    status = AutopilotService.STATUS_FAILED;
+                }
+            }
+            actions.add(new Action(now == null ? TYPE_KEYWORD : TYPE_BID, p.keyword(),
+                    now == null ? "없음" : won(now.bidAmt() != null ? now.bidAmt() : 0), won(p.bid()),
+                    "키워드 분석 결과대로 " + (now == null ? "넣습니다." : "입찰가를 맞춥니다."), status));
+        }
+        for (NccKeyword k : existing.values()) {
+            if (keep.contains(normalize(k.keyword()))) {
+                continue;
+            }
+            String status = idle;
+            try {
+                client.deleteKeyword(k.nccKeywordId());
+                tx.executeWithoutResult(s -> keywordRepository.findByAdAccountIdAndNccKeywordId(accountId, k.nccKeywordId())
+                        .ifPresent(keywordRepository::delete));
+            } catch (RuntimeException e) {
+                log.error("분석에서 빠진 키워드 삭제 실패: {}", k.keyword(), e);
+                status = AutopilotService.STATUS_FAILED;
+            }
+            String why = picks.stream().filter(p -> normalize(p.keyword()).equals(normalize(k.keyword())))
+                    .map(KeywordSelector.Pick::reason).findFirst()
+                    .orElse("관련 키워드 분석 후보에 들지 못했습니다(검색량이 적거나 관련성이 낮음).");
+            actions.add(new Action(TYPE_DELETE, k.keyword(), won(k.bidAmt() != null ? k.bidAmt() : 0), "삭제", why, status));
+        }
+    }
+
+    private RunResult saveEconomicsAndFinish(AccountScope scope, LaunchPlan plan, String nccCampaignId, boolean dry,
+            List<Action> actions, List<String> notes) {
         // 4) 캠페인 손익 기준 저장 + 동기화 (자동 운영이 바로 이 그룹을 맡게)
-        String nccCampaignId = campaign.nccCampaignId();
         if (!dry) {
             try {
                 syncService.syncAccount(scope.account(), 1);

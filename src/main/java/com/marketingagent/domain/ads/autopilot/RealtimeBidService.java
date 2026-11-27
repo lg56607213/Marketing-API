@@ -53,6 +53,8 @@ public class RealtimeBidService {
     private static final int MAX_CHANGES_PER_RUN = 30;
     private static final int ESTIMATE_CHUNK = 50;
     private static final int RESPECT_EFFICIENCY_DAYS = 7;
+    static final int RESPECT_LAUNCH_DAYS = 7;
+    static final String LAUNCH_PREFIX = "[새 광고]";
     private static final double FAST_PACE = 1.3;
     private static final double SLOW_DOWN = 0.85;
     private static final double STOP_PACE = 0.7;
@@ -128,6 +130,7 @@ public class RealtimeBidService {
         }
 
         Set<String> respected = recentlyTunedByEfficiency(scope.id());
+        Set<String> launched = recentlyLaunched(scope.id());
         double pace = paceFactor(scope, keywords, notes);
         Map<String, Long> groupBids = new HashMap<>();
         adGroupRepository.findByAdAccountIdOrderByNameAsc(scope.id())
@@ -137,7 +140,7 @@ public class RealtimeBidService {
         int changed = 0;
         int skipped = 0;
         for (AdKeyword k : keywords) {
-            if (respected.contains(k.getNccKeywordId())) {
+            if (respected.contains(k.getNccKeywordId()) || launched.contains(k.getKeyword().replace(" ", ""))) {
                 continue;
             }
             Long estimate = estimates.get(k.getKeyword());
@@ -243,6 +246,31 @@ public class RealtimeBidService {
     }
 
     /** 최근 7일 안에 전환 효율 기준으로 바꾼 키워드. 그 판단이 결과를 낼 때까지 실시간 입찰은 손대지 않는다. */
+    /**
+     * 새 광고 시작 때 키워드 분석(검색량·클릭률·입찰가별 예측)으로 입찰가를 정한 키워드.
+     * 실제 노출·클릭이 쌓일 때까지(RESPECT_LAUNCH_DAYS) 순위 추정가로 끌고 가지 않는다.
+     */
+    private Set<String> recentlyLaunched(Long accountId) {
+        Set<String> names = new HashSet<>();
+        LocalDate today = LocalDate.now();
+        for (AutopilotRun run : runRepository.findByAdAccountIdAndPreviewFalseAndDryRunFalseAndRunDateBetweenOrderByIdAsc(
+                accountId, today.minusDays(RESPECT_LAUNCH_DAYS), today)) {
+            if (run.getSummary() == null || !run.getSummary().startsWith(LAUNCH_PREFIX)) {
+                continue;
+            }
+            try {
+                RunResult result = objectMapper.readValue(run.getContentJson(), RunResult.class);
+                result.actions().stream()
+                        .filter(a -> ("키워드 추가".equals(a.type()) || "입찰가 변경".equals(a.type()))
+                                && AutopilotService.STATUS_APPLIED.equals(a.status()))
+                        .forEach(a -> names.add(a.target().replace(" ", "")));
+            } catch (Exception e) {
+                // 읽지 못한 기록은 건너뛴다
+            }
+        }
+        return names;
+    }
+
     private Set<String> recentlyTunedByEfficiency(Long accountId) {
         Set<String> ids = new HashSet<>();
         recommendationRepository.findByAdAccountIdAndStatusAndDecidedAtAfter(accountId, BidStatus.APPLIED,

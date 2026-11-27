@@ -30,7 +30,21 @@ public record LaunchPlan(
         Long maxCpc,
         String businessNote,
         List<String> keywords,
-        List<TextAd> ads
+        List<TextAd> ads,
+        Analysis analysis
 ) {
+    /**
+     * 키워드를 데이터로 고르는 기준. 있으면 keywords 는 후보로만 쓰고, 넣을 키워드와 입찰가는 분석 결과로 정한다.
+     *
+     * @param hints     키워드도구에 넣을 힌트(5개씩 나눠 조회)
+     * @param bidLadder 성과 예측을 받을 입찰가 단계
+     * @param assumedCvr 실측 전환율이 없을 때의 가정 전환율
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Analysis(List<String> hints, List<String> requireAny, List<String> focusAny,
+                           List<String> excludeWords, List<String> audienceTerms, List<String> productTerms,
+                           double audienceWeight, double productWeight, long minMonthlySearches,
+                           List<Long> bidLadder, double assumedCvr, int maxKeywords, int maxCandidates) {}
+
     public record TextAd(String headline, String description) {}
 }
