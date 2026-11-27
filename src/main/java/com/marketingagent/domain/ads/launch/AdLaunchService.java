@@ -112,9 +112,13 @@ public class AdLaunchService {
                     "캠페인 " + campaign.name() + "에 새 광고그룹을 만들었습니다. 사이트 " + channel.key(), idle));
         }
 
-        // 2) 소재: 하나도 없을 때만 넣는다
-        if (!dry && client.countAds(adgroupId) == 0) {
+        // 2) 소재: 같은 제목이 없는 것만 넣는다(실패한 소재는 다음 실행에서 다시 시도된다)
+        if (!dry) {
+            Set<String> headlines = new HashSet<>(client.listAdHeadlines(adgroupId));
             for (LaunchPlan.TextAd ad : plan.ads() != null ? plan.ads() : List.<LaunchPlan.TextAd>of()) {
+                if (headlines.contains(ad.headline())) {
+                    continue;
+                }
                 if (ad.headline().length() > HEADLINE_MAX || ad.description().length() > DESCRIPTION_MAX) {
                     notes.add("소재 글자 수가 너무 길어 넣지 않았습니다: " + ad.headline());
                     continue;

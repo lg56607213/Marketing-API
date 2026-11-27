@@ -400,9 +400,11 @@ public class NaverSearchAdClient implements SearchAdClient {
     }
 
     @Override
-    public int countAds(String nccAdgroupId) {
+    public List<String> listAdHeadlines(String nccAdgroupId) {
         return get("/ncc/ads", "nccAdgroupId=" + encode(nccAdgroupId),
-                new ParameterizedTypeReference<List<JsonNode>>() {}).size();
+                new ParameterizedTypeReference<List<JsonNode>>() {}).stream()
+                .map(n -> n.path("ad").path("headline").asText(""))
+                .toList();
     }
 
     @Override

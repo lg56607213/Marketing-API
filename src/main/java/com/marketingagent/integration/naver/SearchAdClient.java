@@ -134,8 +134,8 @@ public interface SearchAdClient {
         throw new UnsupportedOperationException("광고그룹 생성을 지원하지 않는 클라이언트입니다");
     }
 
-    /** 광고그룹의 소재 수. */
-    default int countAds(String nccAdgroupId) {
+    /** 광고그룹에 있는 텍스트 소재의 제목 목록. */
+    default List<String> listAdHeadlines(String nccAdgroupId) {
         throw new UnsupportedOperationException("소재 조회를 지원하지 않는 클라이언트입니다");
     }
 
