@@ -978,3 +978,55 @@ export interface ProposalApplyRequest {
   items: { keyword: string; bid: number }[]
   removeUnselected: boolean
 }
+
+// 정부지원사업 매칭
+export interface SubsidyProfile {
+  id?: number
+  name: string
+  entityType: '법인' | '개인' | '예비창업자'
+  foundedDate: string | null
+  regionSido: string | null
+  regionSigungu: string | null
+  ksicCode: string | null
+  industryName: string | null
+  revenueKrw: number | null
+  employees: number | null
+  certifications: string[]
+  ceoBirthYear: number | null
+  ceoGender: string | null
+  keywords: string | null
+  emailOptIn: boolean
+  recipients: string | null
+}
+
+export interface SubsidyMatchItem {
+  id: number
+  announcementId: number
+  title: string
+  agency: string | null
+  url: string | null
+  source: string
+  applyStart: string | null
+  applyEnd: string | null
+  daysLeft: number | null
+  supportType: string | null
+  amountText: string | null
+  summary: string | null
+  score: number
+  verdict: 'fit' | 'maybe' | 'no'
+  reasons: string[]
+  blockers: string[]
+  aiJudged: boolean
+  starred: boolean
+}
+
+export interface SubsidyStatus {
+  enabled: boolean
+  bizinfoConfigured: boolean
+  kstartupConfigured: boolean
+  aiAvailable: boolean
+  announcements: number
+  unanalyzed: number
+  profiles: number
+  recentRuns: { id: number; job: string; startedAt: string; finishedAt: string | null; status: string; detail: string | null }[]
+}

@@ -8,6 +8,9 @@ import type {
   OnboardingProposal,
   AutopilotRun,
   KeywordProposal,
+  SubsidyProfile,
+  SubsidyMatchItem,
+  SubsidyStatus,
   KeywordProposalRequest,
   ProposalApplyRequest,
   AutopilotSettings,
@@ -255,6 +258,21 @@ export const keywordProposalApi = {
     http
       .post<ApiResponse<AutopilotRun>>('/ads/keyword-proposals/apply', request, { params: account(), timeout: 120000 })
       .then(unwrap),
+}
+
+// 정부지원사업 매칭 (정보 제공용)
+export const subsidyApi = {
+  profiles: () => http.get<ApiResponse<SubsidyProfile[]>>('/subsidy/profiles').then(unwrap),
+  create: (p: SubsidyProfile) => http.post<ApiResponse<SubsidyProfile>>('/subsidy/profiles', p).then(unwrap),
+  update: (id: number, p: SubsidyProfile) =>
+    http.put<ApiResponse<SubsidyProfile>>(`/subsidy/profiles/${id}`, p).then(unwrap),
+  remove: (id: number) => http.delete(`/subsidy/profiles/${id}`),
+  rematch: (id: number) => http.post<ApiResponse<number>>(`/subsidy/profiles/${id}/rematch`, null, { timeout: 180000 }).then(unwrap),
+  matches: (id: number) => http.get<ApiResponse<SubsidyMatchItem[]>>(`/subsidy/profiles/${id}/matches`).then(unwrap),
+  star: (matchId: number, value: boolean) => http.post(`/subsidy/matches/${matchId}/star`, null, { params: { value } }),
+  status: () => http.get<ApiResponse<SubsidyStatus>>('/subsidy/admin/status').then(unwrap),
+  run: (job: string) =>
+    http.post<ApiResponse<string[]>>('/subsidy/admin/run', null, { params: { job }, timeout: 600000 }).then(unwrap),
 }
 
 // 유입 검색어 리포트

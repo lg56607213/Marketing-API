@@ -10,6 +10,7 @@ import {
   MessageSquare,
   UserCheck,
   Sparkles,
+  Landmark,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -21,6 +22,7 @@ const topNavItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
   { to: '/projects', icon: FolderOpen, label: '프로젝트' },
   { to: '/content/new', icon: Wand2, label: '콘텐츠 생성' },
+  { to: '/subsidy', icon: Landmark, label: '정부지원사업' },
 ]
 
 const analyticsItems = [
