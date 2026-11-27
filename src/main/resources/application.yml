@@ -129,7 +129,8 @@ subsidy:
   bizinfo-key: ${BIZINFO_KEY:}
   bizinfo-url: ${BIZINFO_URL:https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do}
   data-go-kr-key: ${DATA_GO_KR_KEY:}
-  kstartup-url: ${KSTARTUP_URL:https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01}
+  kstartup-url: ${KSTARTUP_URL:https://apis.data.go.kr/B552735/kisedKstartupService02/getAnnouncementInformation02}
+  fanfandaero-url: ${FANFANDAERO_URL:https://apis.data.go.kr/B555280/sprtBizInfos1/getSprtBizInfos1}
   extract-model: ${ANTHROPIC_MODEL_EXTRACT:claude-haiku-5-5}
   judge-model: ${ANTHROPIC_MODEL_JUDGE:claude-sonnet-5-5}
   max-analyze-per-day: ${SUBSIDY_MAX_ANALYZE_PER_DAY:200}

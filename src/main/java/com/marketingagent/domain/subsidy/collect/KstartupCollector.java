@@ -93,8 +93,12 @@ public class KstartupCollector implements AnnouncementCollector {
             return null;
         }
         String agency = Fields.text(n, "pbanc_ntrp_nm", "sprv_inst", "pbancNtrpNm");
-        String summary = Fields.text(n, "pbanc_ctnt", "pbancCtnt");
+        String support = Fields.text(n, "support_ctnt");
+        String summary = joinNonNull(Fields.text(n, "pbanc_ctnt", "pbancCtnt"), support != null ? "지원 내용: " + support : null);
+        String excluded = Fields.text(n, "aply_excl_trgt_ctnt");
+        String field = Fields.text(n, "supt_biz_clsfc");
         String target = joinNonNull(Fields.text(n, "aply_trgt_ctnt", "aplyTrgtCtnt"), Fields.text(n, "aply_trgt"),
+                excluded != null ? "제외 대상: " + excluded : null, field != null ? "분야: " + field : null,
                 Fields.text(n, "biz_enyy") != null ? "업력: " + Fields.text(n, "biz_enyy") : null,
                 Fields.text(n, "biz_trgt_age") != null ? "대상 연령: " + Fields.text(n, "biz_trgt_age") : null);
         String region = Fields.text(n, "supt_regin", "suptRegin");

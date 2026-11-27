@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param bizinfoKey           기업마당 API 인증키(crtfcKey)
  * @param bizinfoUrl           기업마당 API 주소
  * @param dataGoKrKey          공공데이터포털 서비스키(K-Startup)
- * @param kstartupUrl          K-Startup 공고 조회 주소(활용신청 후 operation 이름 확인)
+ * @param kstartupUrl          K-Startup 공고 조회 주소
+ * @param fanfandaeroUrl       판판대로 지원사업 조회 주소(같은 공공데이터포털 키)
  * @param extractModel         공고 자격요건 추출 모델(공고 1건당 1회)
  * @param judgeModel           애매한 건 재판단 모델
  * @param maxAnalyzePerDay     하루 공고 분석 상한(AI 비용 상한)
@@ -23,6 +24,7 @@ public record SubsidyProperties(
         String bizinfoUrl,
         String dataGoKrKey,
         String kstartupUrl,
+        String fanfandaeroUrl,
         String extractModel,
         String judgeModel,
         int maxAnalyzePerDay,

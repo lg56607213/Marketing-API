@@ -39,7 +39,8 @@ final class Fields {
                 .replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
                 .replace("&quot;", "\"").replace("&#39;", "'")
                 .replaceAll("\\s+", " ").trim();
-        return t.isEmpty() ? null : t;
+        // 공공데이터포털 일부 API 는 빈 값을 "None"·"null" 글자로 보낸다
+        return t.isEmpty() || t.equalsIgnoreCase("none") || t.equalsIgnoreCase("null") ? null : t;
     }
 
     /** 문자열 안의 n번째(0부터) 날짜. "2026-01-02 ~ 2026-02-03", "20260102" 등. 없으면 null. */

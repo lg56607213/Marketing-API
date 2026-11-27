@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /** 가정 샘플 기준. 실제 응답 샘플이 생기면 같은 테스트를 실제 파일로도 돌린다. */
 class CollectorNormalizeTest {
 
-    private final SubsidyProperties props = new SubsidyProperties(true, "", "", "", "", "", "", 10, 5, 1);
+    private final SubsidyProperties props = new SubsidyProperties(true, "", "", "", "", "", "", "", 10, 5, 1);
     private final ObjectMapper om = new ObjectMapper();
 
     private String fixture(String name) throws Exception {
@@ -69,6 +69,36 @@ class CollectorNormalizeTest {
         assertThat(n.targetText()).contains("예비창업자").contains("만 39세 이하");
         assertThat(n.regionText()).isEqualTo("전국");
         assertThat(n.applyEnd()).isEqualTo(LocalDate.of(2099, 12, 31));
+    }
+
+    @Test
+    void K스타트업_실제_응답의_None은_빈값으로_읽는다() throws Exception {
+        KstartupCollector c = new KstartupCollector(props, om);
+        var items = om.readTree(fixture("kstartup-real.json")).path("data");
+        Normalized n = c.normalize(items.get(0));
+        assertThat(n.sourceId()).isEqualTo("179887");
+        assertThat(n.title()).contains("글로벌 액셀러레이팅");
+        assertThat(n.agency()).isEqualTo("중소벤처기업부 장관");
+        assertThat(n.regionText()).isEqualTo("전국");
+        assertThat(n.applyEnd()).isEqualTo(LocalDate.of(2026, 12, 28));
+        assertThat(n.targetText()).doesNotContain("None").contains("업력:").contains("분야: 글로벌");
+        assertThat(n.summary()).contains("지원 내용");
+        assertThat(n.url()).startsWith("https://www.k-startup.go.kr/");
+    }
+
+    @Test
+    void 판판대로_실제_응답을_공통모양으로_바꾼다() throws Exception {
+        FanfandaeroCollector c = new FanfandaeroCollector(props, om);
+        var items = om.readTree(fixture("fanfandaero-real.json")).path("item");
+        Normalized n = c.normalize(items.get(0));
+        assertThat(n.sourceId()).isEqualTo("202601020000");
+        assertThat(n.agency()).isEqualTo("한국중소벤처기업유통원");
+        assertThat(n.regionText()).isEqualTo("전국");
+        assertThat(n.applyStart()).isEqualTo(LocalDate.of(2026, 2, 9));
+        assertThat(n.applyEnd()).isEqualTo(LocalDate.of(2026, 3, 6));
+        assertThat(n.targetText()).contains("소상공인").contains("분야: 대한민국 동행축제");
+        assertThat(n.summary()).contains("지원 유형: 유통");
+        assertThat(n.url()).startsWith("https://fanfandaero.kr/");
     }
 
     @Test
