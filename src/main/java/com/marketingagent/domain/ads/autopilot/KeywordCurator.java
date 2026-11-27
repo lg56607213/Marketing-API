@@ -325,7 +325,14 @@ public class KeywordCurator {
         if (!preview && !dry) {
             try {
                 List<NccKeyword> created = scope.client().createKeywords(adgroup,
-                        List.of(new SearchAdClient.NewKeyword(c.keyword(), bid)));
+                        List.of(new SearchAdClient.NewKeyword(c.keyword(), bid))).stream()
+                        .filter(k -> k.nccKeywordId() != null && !k.nccKeywordId().isBlank())
+                        .toList();
+                if (created.isEmpty()) {
+                    // 네이버가 ID 를 돌려주지 않으면 등록됐는지 알 수 없다. 저장하지 않고 다음 동기화에 맡긴다
+                    log.warn("자동 운영 키워드 추가: 네이버가 키워드 ID 를 돌려주지 않았습니다: {}", c.keyword());
+                    status = AutopilotService.STATUS_FAILED;
+                }
                 tx.executeWithoutResult(s -> created.forEach(k -> keywordRepository
                         .findByAdAccountIdAndNccKeywordId(scope.id(), k.nccKeywordId())
                         .ifPresentOrElse(e -> e.update(k.keyword(), k.status(), k.bidAmt(), k.useGroupBidAmt()),

@@ -117,6 +117,8 @@ public class RealtimeBidService {
         }
 
         List<AdKeyword> keywords = keywordRepository.findByAdAccountId(scope.id()).stream()
+                // 네이버 ID 가 없는 키워드는 조회·변경 요청에 넣으면 네이버가 요청 전체를 거부한다(11001)
+                .filter(k -> k.getNccKeywordId() != null && !k.getNccKeywordId().isBlank())
                 .filter(k -> k.getStatus() == null || !k.getStatus().toUpperCase().contains("PAUSE"))
                 .filter(k -> !"DELETED".equalsIgnoreCase(k.getStatus()))
                 .toList();

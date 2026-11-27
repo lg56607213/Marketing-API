@@ -49,6 +49,12 @@ public class AdSyncService {
         int adgroupCount = 0;
         List<String> keywordIds = new ArrayList<>();
 
+        int broken = keywordRepository.deleteWithoutNaverId(accountId);
+        if (broken > 0) {
+            log.warn("네이버 ID 없이 저장된 키워드 {}건을 정리했습니다(계정 {}). 네이버에 있으면 이번 동기화로 다시 들어옵니다.",
+                    broken, accountId);
+        }
+
         for (NccCampaign campaign : client.listCampaigns()) {
             upsertCampaign(accountId, campaign);
             campaignCount++;
