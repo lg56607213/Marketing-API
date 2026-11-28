@@ -1068,3 +1068,45 @@ export interface SubsidySearchItem {
   reasons: string[]
   blockers: string[]
 }
+
+// ── 브랜드커넥트 상품 블로그 글 ──
+export interface AffiliateShopItem {
+  title: string | null
+  link: string | null
+  image: string | null
+  lowPrice: number | null
+  mallName: string | null
+  productId: string | null
+  brand: string | null
+  maker: string | null
+  category: string | null
+}
+
+export interface AffiliateSection { heading: string; body: string; photo: string | null }
+
+export interface AffiliateDraft { title: string; tags: string[]; sections: AffiliateSection[]; summary: string }
+
+export interface AffiliatePost {
+  id: number
+  productName: string
+  linkUrl: string
+  keyword: string | null
+  status: 'WRITING' | 'DONE' | 'FAILED'
+  error: string | null
+  product: AffiliateShopItem | null
+  draft: AffiliateDraft | null
+  photoCaptions: string[]
+  disclosure: string
+  createdAt: string
+}
+
+export interface AffiliatePostRequest {
+  productName: string
+  linkUrl: string
+  productNotes: string | null
+  review: string | null
+  photoCaptions: string[]
+  keyword: string | null
+}
+
+export interface AffiliateStatus { shopConfigured: boolean; usedToday: number; maxPerDay: number }

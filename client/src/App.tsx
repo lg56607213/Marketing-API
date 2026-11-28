@@ -22,6 +22,7 @@ import { AutopilotPage } from '@/pages/analytics/AutopilotPage'
 import { OnboardingPage } from '@/pages/OnboardingPage'
 import { GoalPage } from '@/pages/GoalPage'
 import { SubsidyPage } from '@/pages/SubsidyPage'
+import { AffiliateBlogPage } from '@/pages/AffiliateBlogPage'
 import { AIHistoryPage } from '@/pages/AIHistoryPage'
 import { ImageLibraryPage } from '@/pages/ImageLibraryPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/analytics/channels" element={<ChannelAnalyticsPage />} />
           <Route path="/goals" element={<GoalPage />} />
           <Route path="/subsidy" element={<SubsidyPage />} />
+          <Route path="/affiliate-blog" element={<AffiliateBlogPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/analytics/plan" element={<PlanPage />} />
           <Route path="/analytics/briefings" element={<BriefingPage />} />

@@ -1,5 +1,8 @@
 import axios from 'axios'
 import type {
+  AffiliatePost,
+  AffiliatePostRequest,
+  AffiliateStatus,
   ApiResponse,
   CompetitorReport,
   HourOfDay,
@@ -383,4 +386,15 @@ export const seoApi = {
     http
       .get<ApiResponse<SeoRow[]>>('/seo/search-analytics', { params: { dimension, limit } })
       .then(unwrap),
+}
+
+export const affiliateApi = {
+  status: () => http.get<ApiResponse<AffiliateStatus>>('/affiliate/status').then(unwrap),
+  list: () => http.get<ApiResponse<AffiliatePost[]>>('/affiliate/posts').then(unwrap),
+  create: (r: AffiliatePostRequest) =>
+    http.post<ApiResponse<AffiliatePost>>('/affiliate/posts', r, { timeout: 180000 }).then(unwrap),
+  rewrite: (id: number) =>
+    http.post<ApiResponse<AffiliatePost>>(`/affiliate/posts/${id}/rewrite`, null, { timeout: 180000 }).then(unwrap),
+  remove: (id: number) => http.delete(`/affiliate/posts/${id}`),
+  image: (url: string) => http.get<Blob>('/affiliate/image', { params: { url }, responseType: 'blob' }).then((r) => r.data),
 }

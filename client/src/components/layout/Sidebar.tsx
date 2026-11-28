@@ -11,6 +11,7 @@ import {
   UserCheck,
   Sparkles,
   Landmark,
+  ShoppingBag,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,7 @@ const topNavItems = [
   { to: '/projects', icon: FolderOpen, label: '프로젝트' },
   { to: '/content/new', icon: Wand2, label: '콘텐츠 생성' },
   { to: '/subsidy', icon: Landmark, label: '정부지원사업' },
+  { to: '/affiliate-blog', icon: ShoppingBag, label: '브랜드커넥트 블로그' },
 ]
 
 const analyticsItems = [
