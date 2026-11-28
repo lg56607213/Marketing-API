@@ -19,5 +19,11 @@ public final class AffiliateDtos {
                            ShopItem product, Draft draft, List<String> photoCaptions, String disclosure,
                            LocalDateTime createdAt) {}
 
+    /** clientSecret 을 비우면 저장된 값을 유지한다. */
+    public record SettingsRequest(String clientId, String clientSecret) {}
+
+    /** Secret 은 돌려주지 않는다. */
+    public record SettingsView(boolean configured, String clientId, LocalDateTime verifiedAt) {}
+
     public record Status(boolean shopConfigured, int usedToday, int maxPerDay) {}
 }

@@ -12,6 +12,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { affiliateApi, apiMessage } from '@/services/api'
 import type { AffiliatePost, AffiliatePostRequest, AffiliateStatus } from '@/types'
 import { cn } from '@/lib/utils'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useSearchParams } from 'react-router-dom'
+import { AffiliateKeyPanel } from '@/features/affiliate/AffiliateKeyPanel'
 
 const MAX_ITEMS = 10
 const MAX_PHOTOS = 10
@@ -46,6 +49,22 @@ const toRequest = (r: Row): AffiliatePostRequest => ({
 })
 
 export function AffiliateBlogPage() {
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'key' ? 'key' : 'write'
+  const [reload, setReload] = useState(0)
+  return (
+    <Tabs value={tab} onValueChange={(v) => setParams(v === 'key' ? { tab: 'key' } : {})} className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="write">블로그 글 만들기</TabsTrigger>
+        <TabsTrigger value="key">키 넣기</TabsTrigger>
+      </TabsList>
+      <TabsContent value="write"><WritePanel key={reload} onNeedKey={() => setParams({ tab: 'key' })} /></TabsContent>
+      <TabsContent value="key"><AffiliateKeyPanel onSaved={() => setReload((n) => n + 1)} /></TabsContent>
+    </Tabs>
+  )
+}
+
+function WritePanel({ onNeedKey }: { onNeedKey: () => void }) {
   const [status, setStatus] = useState<AffiliateStatus | null>(null)
   const [rows, setRows] = useState<Row[]>([newRow()])
   const [posts, setPosts] = useState<AffiliatePost[]>([])
@@ -127,7 +146,8 @@ export function AffiliateBlogPage() {
           {status && !status.shopConfigured && (
             <p className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-50 px-3 py-2 text-amber-800">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              네이버 쇼핑 검색 연결 전이라 가격 · 브랜드 · 대표 사진을 자동으로 확인하지 못합니다. 지금은 아래 "상품 설명"에 넣은 내용만으로 씁니다.
+              <span className="flex-1">네이버 키를 넣기 전이라 가격 · 브랜드 · 대표 사진을 자동으로 확인하지 못합니다. 지금은 아래 "상품 설명"에 넣은 내용만으로 씁니다.</span>
+              <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={onNeedKey}>키 넣기</Button>
             </p>
           )}
           <p className="text-muted-foreground">

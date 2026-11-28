@@ -35,27 +35,52 @@ public class NaverShopClient {
     public record ShopItem(String title, String link, String image, Long lowPrice, String mallName, String productId,
                            String brand, String maker, String category) {}
 
-    public boolean configured() {
-        return properties.shopConfigured();
+    /** 업체가 넣은 네이버 개발자센터 검색 API 키. */
+    public record Credentials(String clientId, String clientSecret) {}
+
+    /** 서버 공용 키(설정 파일). 업체 키가 없을 때만 쓴다. 없으면 null. */
+    public Credentials serverDefault() {
+        return properties.shopConfigured()
+                ? new Credentials(properties.naverClientId(), properties.naverClientSecret()) : null;
     }
 
     /** 상품명으로 찾아 링크의 상품번호와 같은 것을, 없으면 이름이 가장 비슷한 것을 고른다. 못 찾으면 null. */
-    public ShopItem find(String productName, String linkUrl) {
-        if (!configured()) {
+    public ShopItem find(Credentials creds, String productName, String linkUrl) {
+        if (creds == null) {
             return null;
         }
         try {
-            String url = properties.shopUrl() + "?display=20&query="
-                    + URLEncoder.encode(productName, StandardCharsets.UTF_8);
-            String body = restClient.get().uri(URI.create(url))
-                    .header("X-Naver-Client-Id", properties.naverClientId())
-                    .header("X-Naver-Client-Secret", properties.naverClientSecret())
-                    .retrieve().body(String.class);
-            return pick(parse(objectMapper, body), productName, linkUrl);
+            return pick(parse(objectMapper, search(creds, productName)), productName, linkUrl);
         } catch (Exception e) {
             log.warn("네이버 쇼핑 검색 실패: {} {}", productName, e.getMessage());
             return null;
         }
+    }
+
+    /** 키가 맞는지 실제로 한 번 검색해 본다. 틀리면 이유를 담아 예외. */
+    public void verify(Credentials creds) {
+        try {
+            search(creds, "텀블러");
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            int code = e.getStatusCode().value();
+            if (code == 401) {
+                throw new IllegalArgumentException("Client ID 또는 Client Secret 이 맞지 않습니다.");
+            }
+            if (code == 403) {
+                throw new IllegalArgumentException("이 애플리케이션에 \"검색\" API 가 켜져 있지 않습니다. 개발자센터 > 내 애플리케이션 > API 설정에서 검색을 추가하세요.");
+            }
+            throw new IllegalArgumentException("네이버가 키 확인을 거절했습니다 (HTTP " + code + ").");
+        } catch (Exception e) {
+            throw new IllegalArgumentException("네이버에 연결하지 못했습니다. 잠시 뒤 다시 해 주세요.");
+        }
+    }
+
+    private String search(Credentials creds, String query) {
+        String url = properties.shopUrl() + "?display=20&query=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+        return restClient.get().uri(URI.create(url))
+                .header("X-Naver-Client-Id", creds.clientId())
+                .header("X-Naver-Client-Secret", creds.clientSecret())
+                .retrieve().body(String.class);
     }
 
     static List<ShopItem> parse(ObjectMapper om, String body) throws Exception {

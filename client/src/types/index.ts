@@ -1109,4 +1109,6 @@ export interface AffiliatePostRequest {
   keyword: string | null
 }
 
+export interface AffiliateSettings { configured: boolean; clientId: string | null; verifiedAt: string | null }
+
 export interface AffiliateStatus { shopConfigured: boolean; usedToday: number; maxPerDay: number }

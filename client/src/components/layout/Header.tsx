@@ -14,7 +14,7 @@ const pageTitles: Record<string, string> = {
   '/analytics/autopilot': '자동 운영',
   '/analytics/keyword-proposals': '키워드 분석 · 제안',
   '/subsidy': '정부지원사업',
-  '/affiliate-blog': '브랜드커넥트 블로그',
+  '/affiliate-blog': '네이버 브랜드커넥트',
   '/analytics/market': '시장 · 키워드 수요',
   '/analytics/channels': '채널 애널리틱스',
   '/analytics/competitors': '경쟁사 분석',

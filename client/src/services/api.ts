@@ -2,6 +2,7 @@ import axios from 'axios'
 import type {
   AffiliatePost,
   AffiliatePostRequest,
+  AffiliateSettings,
   AffiliateStatus,
   ApiResponse,
   CompetitorReport,
@@ -390,6 +391,10 @@ export const seoApi = {
 
 export const affiliateApi = {
   status: () => http.get<ApiResponse<AffiliateStatus>>('/affiliate/status').then(unwrap),
+  settings: () => http.get<ApiResponse<AffiliateSettings>>('/affiliate/settings').then(unwrap),
+  saveSettings: (r: { clientId: string; clientSecret: string | null }) =>
+    http.put<ApiResponse<AffiliateSettings>>('/affiliate/settings', r, { timeout: 30000 }).then(unwrap),
+  removeSettings: () => http.delete('/affiliate/settings'),
   list: () => http.get<ApiResponse<AffiliatePost[]>>('/affiliate/posts').then(unwrap),
   create: (r: AffiliatePostRequest) =>
     http.post<ApiResponse<AffiliatePost>>('/affiliate/posts', r, { timeout: 180000 }).then(unwrap),

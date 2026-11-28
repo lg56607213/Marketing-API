@@ -4,6 +4,8 @@ import com.marketingagent.common.ApiResponse;
 import com.marketingagent.common.exception.BadRequestException;
 import com.marketingagent.domain.affiliate.AffiliateDtos.PostRequest;
 import com.marketingagent.domain.affiliate.AffiliateDtos.PostView;
+import com.marketingagent.domain.affiliate.AffiliateDtos.SettingsRequest;
+import com.marketingagent.domain.affiliate.AffiliateDtos.SettingsView;
 import com.marketingagent.domain.affiliate.AffiliateDtos.Status;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,6 +45,23 @@ public class AffiliateController {
     @GetMapping("/api/affiliate/status")
     public ResponseEntity<ApiResponse<Status>> status() {
         return ResponseEntity.ok(ApiResponse.ok(service.status()));
+    }
+
+    @GetMapping("/api/affiliate/settings")
+    public ResponseEntity<ApiResponse<SettingsView>> settings() {
+        return ResponseEntity.ok(ApiResponse.ok(service.settings()));
+    }
+
+    @Operation(summary = "네이버 검색 API 키 저장", description = "네이버에 실제로 검색해 키가 맞는지 확인한 뒤 암호화해 저장한다.")
+    @PutMapping("/api/affiliate/settings")
+    public ResponseEntity<ApiResponse<SettingsView>> saveSettings(@RequestBody SettingsRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(service.saveSettings(request)));
+    }
+
+    @DeleteMapping("/api/affiliate/settings")
+    public ResponseEntity<ApiResponse<Void>> deleteSettings() {
+        service.deleteSettings();
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @GetMapping("/api/affiliate/posts")

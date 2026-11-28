@@ -2,13 +2,17 @@ package com.marketingagent.domain.affiliate;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marketingagent.common.crypto.SecretCipher;
 import com.marketingagent.common.exception.BadRequestException;
 import com.marketingagent.common.exception.ResourceNotFoundException;
 import com.marketingagent.common.security.CurrentUser;
 import com.marketingagent.domain.affiliate.AffiliateDtos.PostRequest;
 import com.marketingagent.domain.affiliate.AffiliateDtos.PostView;
+import com.marketingagent.domain.affiliate.AffiliateDtos.SettingsRequest;
+import com.marketingagent.domain.affiliate.AffiliateDtos.SettingsView;
 import com.marketingagent.domain.affiliate.AffiliateDtos.Status;
 import com.marketingagent.domain.affiliate.AffiliateWriter.Draft;
+import com.marketingagent.domain.affiliate.NaverShopClient.Credentials;
 import com.marketingagent.domain.affiliate.NaverShopClient.ShopItem;
 import java.net.URI;
 import java.time.LocalDate;
@@ -33,9 +37,61 @@ public class AffiliateService {
     private final AffiliateWriter writer;
     private final AffiliateProperties properties;
     private final ObjectMapper objectMapper;
+    private final AffiliateSettingRepository settingRepository;
+    private final SecretCipher cipher;
 
     public Status status() {
-        return new Status(shopClient.configured(), (int) usedToday(CurrentUser.companyId()), properties.maxPerDay());
+        Long companyId = CurrentUser.companyId();
+        return new Status(credentials(companyId) != null, (int) usedToday(companyId), properties.maxPerDay());
+    }
+
+    public SettingsView settings() {
+        return settingRepository.findByCompanyId(CurrentUser.companyId())
+                .map(s -> new SettingsView(true, s.getNaverClientId(), s.getVerifiedAt()))
+                .orElse(new SettingsView(false, null, null));
+    }
+
+    /** 키를 네이버에 실제로 확인한 뒤 저장한다. Secret 을 비우면 저장된 값을 그대로 쓴다. */
+    public SettingsView saveSettings(SettingsRequest req) {
+        Long companyId = CurrentUser.companyId();
+        String id = trim(req.clientId());
+        if (id == null) {
+            throw new BadRequestException("Client ID 를 넣어 주세요.");
+        }
+        AffiliateSetting s = settingRepository.findByCompanyId(companyId).orElse(new AffiliateSetting(companyId));
+        String secret = trim(req.clientSecret());
+        if (secret == null) {
+            if (s.getNaverClientSecretEnc() == null) {
+                throw new BadRequestException("Client Secret 을 넣어 주세요.");
+            }
+            secret = cipher.decrypt(s.getNaverClientSecretEnc());
+        }
+        try {
+            shopClient.verify(new Credentials(id, secret));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage());
+        }
+        s.change(cut(id, 100), cipher.encrypt(secret), CurrentUser.id());
+        settingRepository.save(s);
+        return settings();
+    }
+
+    public void deleteSettings() {
+        settingRepository.findByCompanyId(CurrentUser.companyId()).ifPresent(settingRepository::delete);
+    }
+
+    /** 업체 키 → 없으면 서버 공용 키 → 없으면 null(사용자 설명만으로 씀). */
+    Credentials credentials(Long companyId) {
+        return settingRepository.findByCompanyId(companyId)
+                .map(s -> {
+                    try {
+                        return new Credentials(s.getNaverClientId(), cipher.decrypt(s.getNaverClientSecretEnc()));
+                    } catch (Exception e) {
+                        log.warn("네이버 검색 키 복호화 실패 company={}", companyId);
+                        return null;
+                    }
+                })
+                .orElseGet(shopClient::serverDefault);
     }
 
     public List<PostView> list() {
@@ -70,7 +126,7 @@ public class AffiliateService {
     private PostView generate(AffiliatePost post) {
         List<String> captions = captions(post);
         try {
-            ShopItem item = shopClient.find(post.getProductName(), post.getLinkUrl());
+            ShopItem item = shopClient.find(credentials(post.getCompanyId()), post.getProductName(), post.getLinkUrl());
             post.product(item == null ? null : objectMapper.writeValueAsString(item));
             Draft d = writer.write(post.getProductName(), item, post.getProductNotes(), post.getReview(), captions,
                     post.getKeyword());
