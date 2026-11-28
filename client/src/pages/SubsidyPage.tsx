@@ -14,6 +14,7 @@ import type { SubsidyMatchItem, SubsidyProfile, SubsidyStatus } from '@/types'
 import { cn } from '@/lib/utils'
 import { SubsidySearchPanel } from '@/features/subsidy/SubsidySearchPanel'
 import { SubsidyManualPanel } from '@/features/subsidy/SubsidyManualPanel'
+import { KsicPicker } from '@/features/subsidy/KsicPicker'
 
 const SIDO = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
 const CERTS = ['벤처', '이노비즈', '메인비즈', '여성기업', '장애인기업', '사회적기업', '청년창업']
@@ -322,7 +323,11 @@ function ProfileForm({
         </F>
         <F label="시 · 군 · 구"><Input value={value.regionSigungu ?? ''} onChange={(e) => set('regionSigungu', e.target.value || null)} className="h-9" placeholder="수원시" /></F>
         <F label="업종 (사업자등록증 업태 · 종목)"><Input value={value.industryName ?? ''} onChange={(e) => set('industryName', e.target.value || null)} className="h-9" placeholder="자동차 임대업" /></F>
-        <F label="업종코드 (KSIC, 선택)"><Input value={value.ksicCode ?? ''} onChange={(e) => set('ksicCode', e.target.value || null)} className="h-9" placeholder="76110" /></F>
+        <F label="업종 분류 (검색해서 선택)">
+          <KsicPicker value={value.ksicCode} onChange={(code, name) => {
+            onChange({ ...value, ksicCode: code, industryName: value.industryName || name })
+          }} />
+        </F>
         <F label="연 매출 (원)"><Input inputMode="numeric" value={value.revenueKrw ?? ''} onChange={(e) => set('revenueKrw', numOrNull(e.target.value))} className="h-9" /></F>
         <F label="상시근로자 (명)"><Input inputMode="numeric" value={value.employees ?? ''} onChange={(e) => set('employees', numOrNull(e.target.value))} className="h-9" /></F>
         <F label="대표 출생연도"><Input inputMode="numeric" value={value.ceoBirthYear ?? ''} onChange={(e) => set('ceoBirthYear', numOrNull(e.target.value))} className="h-9" placeholder="1990" /></F>
